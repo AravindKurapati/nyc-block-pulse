@@ -114,3 +114,26 @@ def test_fetch_socrata_stops_after_empty_page(monkeypatch):
     assert len(rows) == 3
     assert [r["id"] for r in rows] == ["0", "1", "2"]
 
+
+def test_collect_liquor_paginates(monkeypatch):
+    from nyc_pulse.collectors import liquor as liquor_mod
+
+    pages = [
+        [{"serial_number": str(i), "county": "NEW YORK", "license_type_name": "OP", "license_status": "Active", "effective_date": None, "premises_address": "", "georeference": None} for i in range(2)],
+        [{"serial_number": "2", "county": "NEW YORK", "license_type_name": "OP", "license_status": "Active", "effective_date": None, "premises_address": "", "georeference": None}],
+    ]
+    call_count = 0
+
+    def fake_get(url, params, timeout):
+        nonlocal call_count
+        result = pages[call_count]
+        call_count += 1
+        return FakeResponse(result)
+
+    monkeypatch.setattr(liquor_mod.httpx, "get", fake_get)
+
+    events = liquor_mod.collect_liquor(limit=2)
+
+    assert call_count == 2
+    assert len(events) == 3
+
