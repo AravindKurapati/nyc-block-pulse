@@ -6,6 +6,15 @@ import typer
 from rich.console import Console
 from rich.markdown import Markdown
 
+from .collectors.dob_permits import collect_dob_permits
+from .collectors.hpd_complaints import collect_hpd_complaints
+from .collectors.hpd_violations import collect_hpd_violations
+from .collectors.liquor import collect_liquor
+from .collectors.nyc_311 import collect_311
+from .collectors.restaurants import collect_restaurants
+from .config import settings
+from .db import get_session, upsert_events
+
 app = typer.Typer()
 console = Console()
 
@@ -26,14 +35,6 @@ def update(
     ),
 ) -> None:
     """Pull recent records from public datasets into Postgres."""
-    from .collectors.dob_permits import collect_dob_permits
-    from .collectors.hpd_complaints import collect_hpd_complaints
-    from .collectors.hpd_violations import collect_hpd_violations
-    from .collectors.liquor import collect_liquor
-    from .collectors.nyc_311 import collect_311
-    from .collectors.restaurants import collect_restaurants
-    from .db import get_session, upsert_events
-
     collectors = {
         "311": collect_311,
         "dob": collect_dob_permits,
@@ -51,10 +52,13 @@ def update(
     session = get_session()
     try:
         for name, collector in targets.items():
-            with console.status(f"Fetching {name}..."):
-                events = collector(days=days) if name != "liquor" else collector()
-            inserted = upsert_events(session, events)
-            console.print(f"[cyan]{name}:[/cyan] {len(events)} fetched, {inserted} new rows")
+            try:
+                with console.status(f"Fetching {name}..."):
+                    events = collector(days=days) if name != "liquor" else collector()
+                inserted = upsert_events(session, events)
+                console.print(f"[cyan]{name}:[/cyan] {len(events)} fetched, {inserted} new rows")
+            except Exception as exc:
+                console.print(f"[yellow]{name}: skipped — {exc}[/yellow]")
     finally:
         session.close()
 
@@ -77,7 +81,10 @@ def block_report(
     with console.status("Resolving location..."):
         loc = resolve_address(query)
     if not loc:
-        console.print("[red]Could not resolve location. Check the query and NYC Geoclient credentials.[/red]")
+        if not settings.nyc_geoclient_app_id or not settings.nyc_geoclient_app_key:
+            console.print("[red]NYC Geoclient credentials not set. Add NYC_GEOCLIENT_APP_ID and NYC_GEOCLIENT_APP_KEY to .env[/red]")
+        else:
+            console.print("[red]Could not resolve location. Check the address format (e.g. '123 Main St, Brooklyn' or 'Ludlow St & Rivington St').[/red]")
         raise typer.Exit(1)
 
     console.print(f"[dim]Resolved: {loc['lat']:.5f}, {loc['lon']:.5f}[/dim]")
