@@ -89,14 +89,18 @@ def block_report(
 
     console.print(f"[dim]Resolved: {loc['lat']:.5f}, {loc['lon']:.5f}[/dim]")
 
-    with console.status("Scoring signals..."):
-        signals = {
-            "construction": score_construction(loc["lat"], loc["lon"], radius, days),
-            "nightlife": score_nightlife(loc["lat"], loc["lon"], radius, days),
-            "housing": score_housing(loc["lat"], loc["lon"], radius, days),
-            "restaurants": score_restaurants(loc["lat"], loc["lon"], radius, days),
-            "quality_of_life": score_quality_of_life(loc["lat"], loc["lon"], radius, days),
-        }
+    session = get_session()
+    try:
+        with console.status("Scoring signals..."):
+            signals = {
+                "construction": score_construction(loc["lat"], loc["lon"], radius, days, session=session),
+                "nightlife": score_nightlife(loc["lat"], loc["lon"], radius, days, session=session),
+                "housing": score_housing(loc["lat"], loc["lon"], radius, days, session=session),
+                "restaurants": score_restaurants(loc["lat"], loc["lon"], radius, days, session=session),
+                "quality_of_life": score_quality_of_life(loc["lat"], loc["lon"], radius, days, session=session),
+            }
+    finally:
+        session.close()
 
     report = render_report(query, loc, signals, days)
     console.print(Markdown(report))

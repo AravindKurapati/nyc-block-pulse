@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from ._common import evidence, fetch_nearby_events
 
 
-def score_quality_of_life(lat: float, lon: float, radius_ft: int = 500, window_days: int = 90) -> dict:
-    rows = fetch_nearby_events(["nyc_311"], lat, lon, radius_ft, window_days)
+def score_quality_of_life(lat: float, lon: float, radius_ft: int = 500, window_days: int = 90, session: Session | None = None) -> dict:
+    rows = fetch_nearby_events(["nyc_311"], lat, lon, radius_ft, window_days, session=session)
     terms = (
         "noise",
         "sanitation",
@@ -27,4 +29,3 @@ def score_quality_of_life(lat: float, lon: float, radius_ft: int = 500, window_d
         "count": len(relevant),
         "evidence": evidence(relevant),
     }
-

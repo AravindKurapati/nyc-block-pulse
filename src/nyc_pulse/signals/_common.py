@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from sqlalchemy import bindparam, text
+from sqlalchemy.orm import Session
 
 from ..db import get_session
 from ..normalize.geography import feet_to_meters
@@ -15,8 +16,10 @@ def fetch_nearby_events(
     lon: float,
     radius_ft: int,
     window_days: int,
+    session: Session | None = None,
 ) -> list[dict[str, Any]]:
-    session = get_session()
+    _session = session or get_session()
+    _owned = session is None
     try:
         statement = (
             text(
@@ -36,7 +39,7 @@ def fetch_nearby_events(
             )
             .bindparams(bindparam("sources", expanding=True))
         )
-        rows = session.execute(
+        rows = _session.execute(
             statement,
             {
                 "sources": tuple(sources),
@@ -47,7 +50,8 @@ def fetch_nearby_events(
             },
         ).fetchall()
     finally:
-        session.close()
+        if _owned:
+            _session.close()
     return [dict(row._mapping) for row in rows]
 
 
@@ -61,4 +65,3 @@ def evidence(rows: list[dict[str, Any]], limit: int = 10) -> list[dict[str, str 
         }
         for row in rows[:limit]
     ]
-

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from ._common import evidence, fetch_nearby_events
 
 
-def score_restaurants(lat: float, lon: float, radius_ft: int = 500, window_days: int = 90) -> dict:
-    rows = fetch_nearby_events(["restaurants", "liquor", "dob_permits"], lat, lon, radius_ft, window_days)
+def score_restaurants(lat: float, lon: float, radius_ft: int = 500, window_days: int = 90, session: Session | None = None) -> dict:
+    rows = fetch_nearby_events(["restaurants", "liquor", "dob_permits"], lat, lon, radius_ft, window_days, session=session)
     relevant = [
         row
         for row in rows
@@ -22,4 +24,3 @@ def score_restaurants(lat: float, lon: float, radius_ft: int = 500, window_days:
         "count": len(relevant),
         "evidence": evidence(relevant),
     }
-
