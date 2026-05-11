@@ -73,6 +73,32 @@ def test_fetch_socrata_paginates_until_partial_page(monkeypatch):
         [{"id": "3"}, {"id": "4"}],             # partial page → stop
     ]
     call_count = 0
+    captured_params = []
+
+    def fake_get(url, params, headers, timeout):
+        nonlocal call_count
+        captured_params.append(dict(params))
+        result = pages[call_count]
+        call_count += 1
+        return FakeResponse(result)
+
+    monkeypatch.setattr("nyc_pulse.collectors.socrata.httpx.get", fake_get)
+
+    rows = fetch_socrata("abcd-1234", "id IS NOT NULL", limit=3)
+
+    assert call_count == 2
+    assert len(rows) == 5
+    assert [r["id"] for r in rows] == ["0", "1", "2", "3", "4"]
+    assert captured_params[0]["$offset"] == 0
+    assert captured_params[1]["$offset"] == 3
+
+
+def test_fetch_socrata_stops_after_empty_page(monkeypatch):
+    pages = [
+        [{"id": "0"}, {"id": "1"}, {"id": "2"}],  # exactly limit=3 → loop continues
+        [],                                          # empty page → stop
+    ]
+    call_count = 0
 
     def fake_get(url, params, headers, timeout):
         nonlocal call_count
@@ -85,6 +111,6 @@ def test_fetch_socrata_paginates_until_partial_page(monkeypatch):
     rows = fetch_socrata("abcd-1234", "id IS NOT NULL", limit=3)
 
     assert call_count == 2
-    assert len(rows) == 5
-    assert [r["id"] for r in rows] == ["0", "1", "2", "3", "4"]
+    assert len(rows) == 3
+    assert [r["id"] for r in rows] == ["0", "1", "2"]
 
