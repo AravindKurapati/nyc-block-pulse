@@ -22,15 +22,23 @@ def fetch_socrata(
     if settings.nyc_open_data_app_token:
         headers["X-App-Token"] = settings.nyc_open_data_app_token
 
-    params = {
-        "$where": where,
-        "$limit": limit,
-        "$offset": offset,
-        "$select": select,
-    }
-    response = httpx.get(url, params=params, headers=headers, timeout=60)
-    response.raise_for_status()
-    return response.json()
+    all_rows: list[dict[str, Any]] = []
+    current_offset = offset
+    while True:
+        params = {
+            "$where": where,
+            "$limit": limit,
+            "$offset": current_offset,
+            "$select": select,
+        }
+        response = httpx.get(url, params=params, headers=headers, timeout=60)
+        response.raise_for_status()
+        page: list[dict[str, Any]] = response.json()
+        all_rows.extend(page)
+        if len(page) < limit:
+            break
+        current_offset += limit
+    return all_rows
 
 
 def days_ago_filter(field: str, days: int) -> str:
