@@ -52,6 +52,13 @@ def fetch_nearby_events(
     finally:
         if _owned:
             _session.close()
+        else:
+            # Rollback any aborted transaction so the caller's shared session
+            # remains usable for subsequent queries.
+            try:
+                _session.rollback()
+            except Exception:
+                pass
     return [dict(row._mapping) for row in rows]
 
 
