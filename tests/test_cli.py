@@ -9,7 +9,7 @@ from nyc_pulse.cli import app
 runner = CliRunner()
 
 
-def test_update_continues_when_one_collector_fails(monkeypatch):
+def test_update_continues_when_one_collector_fails():
     calls = []
 
     def failing_311(days):
@@ -33,3 +33,5 @@ def test_update_continues_when_one_collector_fails(monkeypatch):
 
     assert "dob" in calls, "dob collector should have run despite 311 failure"
     assert result.exit_code == 0
+    assert "311: skipped" in result.output
+    assert "Socrata timeout" in result.output
