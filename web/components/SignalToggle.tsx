@@ -8,27 +8,39 @@ const SIGNALS: Array<{ value: SignalName; label: string }> = [
   { value: "construction", label: "Construction" },
   { value: "housing", label: "Housing" },
   { value: "restaurants", label: "Restaurants" },
+  { value: "crime", label: "Crime" },
+  { value: "fire", label: "Fire Incidents" },
 ];
 
 type SignalToggleProps = {
-  signal: SignalName;
-  onChange: (signal: SignalName) => void;
+  signals: SignalName[];
+  onChange: (signals: SignalName[]) => void;
 };
 
-export default function SignalToggle({ signal, onChange }: SignalToggleProps) {
+export default function SignalToggle({ signals, onChange }: SignalToggleProps) {
+  function toggle(value: SignalName) {
+    if (signals.includes(value)) {
+      if (signals.length === 1) return;
+      onChange(signals.filter((signal) => signal !== value));
+      return;
+    }
+
+    onChange([...signals, value]);
+  }
+
   return (
-    <div className="w-[min(520px,calc(100vw-2rem))] rounded border border-neutral-200 bg-white/95 p-3 shadow-sm backdrop-blur">
+    <div className="w-[min(600px,calc(100vw-2rem))] rounded border border-neutral-200 bg-white/95 p-3 shadow-sm backdrop-blur">
       <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
-        Signal
+        Signals
       </div>
       <div className="flex flex-wrap gap-2">
         {SIGNALS.map((item) => {
-          const active = item.value === signal;
+          const active = signals.includes(item.value);
           return (
             <button
               key={item.value}
               type="button"
-              onClick={() => onChange(item.value)}
+              onClick={() => toggle(item.value)}
               className={[
                 "min-h-9 rounded border px-3 text-sm font-medium transition",
                 active
