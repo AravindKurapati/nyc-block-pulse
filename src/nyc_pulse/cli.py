@@ -7,9 +7,12 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from .collectors.dob_permits import collect_dob_permits
+from .collectors.evictions import collect_evictions
+from .collectors.fdny_fire import collect_fdny_fire
 from .collectors.hpd_complaints import collect_hpd_complaints
 from .collectors.hpd_violations import collect_hpd_violations
 from .collectors.liquor import collect_liquor
+from .collectors.nypd_crime import collect_nypd_crime
 from .collectors.nyc_311 import collect_311
 from .collectors.restaurants import collect_restaurants
 from .config import settings
@@ -31,15 +34,18 @@ def update(
     days: int = typer.Option(7, help="Lookback window in days"),
     source: str = typer.Option(
         "all",
-        help="Source to update: all|311|dob|hpd|hpd_violations|restaurants|liquor",
+        help="Source to update: all|311|dob|evictions|fire|hpd|hpd_violations|crime|restaurants|liquor",
     ),
 ) -> None:
     """Pull recent records from public datasets into Postgres."""
     collectors = {
         "311": collect_311,
         "dob": collect_dob_permits,
+        "evictions": collect_evictions,
+        "fire": collect_fdny_fire,
         "hpd": collect_hpd_complaints,
         "hpd_violations": collect_hpd_violations,
+        "crime": collect_nypd_crime,
         "restaurants": collect_restaurants,
         "liquor": collect_liquor,
     }
@@ -74,6 +80,8 @@ def block_report(
     from .normalize.address import resolve_address
     from .reports.block_report import render_report
     from .signals.construction import score_construction
+    from .signals.crime import score_crime
+    from .signals.fire import score_fire
     from .signals.housing import score_housing
     from .signals.nightlife import score_nightlife
     from .signals.quality_of_life import score_quality_of_life
@@ -99,6 +107,8 @@ def block_report(
                 "housing": score_housing(loc["lat"], loc["lon"], radius, days, session=session),
                 "restaurants": score_restaurants(loc["lat"], loc["lon"], radius, days, session=session),
                 "quality_of_life": score_quality_of_life(loc["lat"], loc["lon"], radius, days, session=session),
+                "crime": score_crime(loc["lat"], loc["lon"], radius, days, session=session),
+                "fire": score_fire(loc["lat"], loc["lon"], radius, days, session=session),
             }
     finally:
         session.close()
