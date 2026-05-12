@@ -182,6 +182,7 @@ export default function Home() {
             isLoading={isBlockLoading}
             error={panelError}
             selectedSignal={signal}
+            onFlyTo={loadBlock}
           />
         </div>
       </div>
