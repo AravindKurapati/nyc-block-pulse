@@ -23,3 +23,51 @@ def test_score_construction_scores_nearby_dob_events(monkeypatch):
     assert result["score"] > 0
     assert result["count"] == 1
     assert result["evidence"][0]["id"] == "dob_permit_1"
+
+
+def test_score_crime_weights_by_severity(monkeypatch):
+    from nyc_pulse.signals import crime
+
+    monkeypatch.setattr(
+        crime,
+        "fetch_nearby_events",
+        lambda *args, **kwargs: [
+            {
+                "id": "crime_1",
+                "source": "nypd_crime",
+                "event_type": "felony",
+                "summary": "ROBBERY",
+                "occurred_at": "2026-05-01",
+                "category": "ROBBERY",
+                "status": None,
+                "raw_json": {},
+            },
+            {
+                "id": "crime_2",
+                "source": "nypd_crime",
+                "event_type": "misdemeanor",
+                "summary": "ASSAULT",
+                "occurred_at": "2026-05-02",
+                "category": "ASSAULT",
+                "status": None,
+                "raw_json": {},
+            },
+            {
+                "id": "crime_3",
+                "source": "nypd_crime",
+                "event_type": "violation",
+                "summary": "DISORDERLY",
+                "occurred_at": "2026-05-03",
+                "category": "DISORDERLY",
+                "status": None,
+                "raw_json": {},
+            },
+        ],
+    )
+
+    result = crime.score_crime(40.7, -73.9)
+
+    assert result["signal_type"] == "crime_complaints"
+    assert result["score"] == 3.5
+    assert result["count"] == 3
+    assert len(result["evidence"]) == 3
