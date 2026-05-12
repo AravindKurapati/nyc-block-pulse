@@ -63,6 +63,8 @@ const SIGNAL_LABELS: Record<SignalName, string> = {
   housing: "Housing",
   restaurants: "Restaurants",
   quality_of_life: "Quality of life",
+  crime: "Crime",
+  fire: "Fire Incidents",
 };
 
 const SIGNAL_ORDER: SignalName[] = [
@@ -71,13 +73,15 @@ const SIGNAL_ORDER: SignalName[] = [
   "housing",
   "restaurants",
   "quality_of_life",
+  "crime",
+  "fire",
 ];
 
 type BlockPanelProps = {
   report: BlockReport | null;
   isLoading?: boolean;
   error?: string | null;
-  selectedSignal?: SignalName;
+  selectedSignals?: SignalName[];
   onFlyTo: (lat: number, lon: number) => void;
 };
 
@@ -164,7 +168,7 @@ export default function BlockPanel({
   report,
   isLoading = false,
   error,
-  selectedSignal,
+  selectedSignals,
   onFlyTo,
 }: BlockPanelProps) {
   const [saves, setSaves] = useState<SavedBlock[]>(() => loadSaves());
@@ -197,7 +201,7 @@ export default function BlockPanel({
             Click the map or search an address
           </p>
           <p className="mt-1 text-xs">
-            The five-signal report will appear here with nearby evidence from
+            The seven-signal report will appear here with nearby evidence from
             the selected 90-day window.
           </p>
           {isLoading ? (
@@ -341,7 +345,7 @@ export default function BlockPanel({
       <div className="space-y-4 p-5">
         {SIGNAL_ORDER.map((key) => {
           const signal = report.signals[key];
-          const active = key === selectedSignal;
+          const active = selectedSignals?.includes(key) ?? false;
           const barWidth = Math.min(100, (signal.score / 50) * 100);
           return (
             <section
