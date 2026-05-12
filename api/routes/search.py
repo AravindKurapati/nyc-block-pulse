@@ -6,10 +6,10 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query
 
 from nyc_pulse.config import settings
+from nyc_pulse.normalize.address import GEOCLIENT_BASE
 
 router = APIRouter(prefix="/api", tags=["search"])
 
-GEOCLIENT_BASE = "https://api.nyc.gov/geoclient/v2"
 BOROUGH_TITLE = {
     "MANHATTAN": "Manhattan",
     "BRONX": "Bronx",

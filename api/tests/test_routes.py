@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from api.deps import get_db_session
 from api.main import app
+from nyc_pulse.normalize.address import GEOCLIENT_BASE
 
 
 class FakeSession:
@@ -128,3 +129,88 @@ def test_events_returns_sampled_feature_collection():
     assert body["total_match"] == 2
     assert body["features"][0]["geometry"]["coordinates"] == [-73.99, 40.72]
     assert body["features"][0]["properties"]["id"] == "311_1"
+
+
+class FakeHttpResponse:
+    def __init__(self, payload, status_code=200):
+        self._payload = payload
+        self.status_code = status_code
+
+    def json(self):
+        return self._payload
+
+
+def test_search_returns_top_five_geoclient_results(monkeypatch):
+    captured = {}
+    payload = {
+        "results": [
+            {
+                "status": "EXACT_MATCH",
+                "response": {
+                    "latitudeInternalLabel": "40.689813",
+                    "longitudeInternalLabel": "-73.992842",
+                    "houseNumber": "200",
+                    "firstStreetNameNormalized": "ATLANTIC AVENUE",
+                    "firstBoroughName": "BROOKLYN",
+                },
+            },
+            {
+                "status": "POSSIBLE_MATCH",
+                "response": {
+                    "latitude": "40.591643",
+                    "longitude": "-74.091693",
+                    "displayName": "200 Atlantic Ave",
+                    "firstBoroughName": "STATEN IS",
+                },
+            },
+            {"status": "POSSIBLE_MATCH", "response": {"latitude": "", "longitude": "-73.9"}},
+            *[
+                {
+                    "status": "POSSIBLE_MATCH",
+                    "response": {
+                        "latitude": f"40.{index}",
+                        "longitude": f"-73.{index}",
+                        "displayName": f"Result {index}",
+                        "firstBoroughName": "QUEENS",
+                    },
+                }
+                for index in range(3, 8)
+            ],
+        ]
+    }
+
+    def fake_get(url, params, headers, timeout):
+        captured.update({"url": url, "params": params, "headers": headers, "timeout": timeout})
+        return FakeHttpResponse(payload)
+
+    import api.routes.search as search_route
+
+    monkeypatch.setattr(search_route.settings, "nyc_geoclient_app_key", "key")
+    monkeypatch.setattr(search_route.httpx, "get", fake_get)
+
+    response = TestClient(app).get("/api/search", params={"q": "200 Atlantic Ave"})
+
+    assert response.status_code == 200
+    assert captured["url"] == f"{GEOCLIENT_BASE}/search.json"
+    assert captured["params"] == {"input": "200 Atlantic Ave"}
+    assert captured["headers"] == {"Ocp-Apim-Subscription-Key": "key"}
+    body = response.json()
+    assert len(body) == 5
+    assert body[0] == {
+        "display": "200 ATLANTIC AVENUE",
+        "lat": 40.689813,
+        "lon": -73.992842,
+        "borough": "Brooklyn",
+    }
+    assert body[1]["borough"] == "Staten Island"
+
+
+def test_search_returns_503_without_geoclient_credentials(monkeypatch):
+    import api.routes.search as search_route
+
+    monkeypatch.setattr(search_route.settings, "nyc_geoclient_app_key", "")
+
+    response = TestClient(app).get("/api/search", params={"q": "200 Atlantic Ave"})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "NYC Geoclient credentials are not configured."
