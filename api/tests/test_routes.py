@@ -42,6 +42,8 @@ def test_block_scores_all_signals_with_one_session(monkeypatch):
         "score_housing",
         "score_restaurants",
         "score_quality_of_life",
+        "score_crime",
+        "score_fire",
     ):
         monkeypatch.setattr(block_route, name, fake_score)
 
@@ -55,8 +57,16 @@ def test_block_scores_all_signals_with_one_session(monkeypatch):
     body = response.json()
     assert body["location"]["lat"] == 40.71978
     assert body["window_days"] == 90
-    assert set(body["signals"]) == {"construction", "nightlife", "housing", "restaurants", "quality_of_life"}
-    assert seen_sessions == [fake_session] * 5
+    assert set(body["signals"]) == {
+        "construction",
+        "nightlife",
+        "housing",
+        "restaurants",
+        "quality_of_life",
+        "crime",
+        "fire",
+    }
+    assert seen_sessions == [fake_session] * 7
     assert fake_session.closed is True
 
 
