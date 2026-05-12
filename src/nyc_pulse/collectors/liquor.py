@@ -2,53 +2,47 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
-
 from ._utils import compact_summary, to_float
+from .socrata import SOCRATA_NY_STATE_BASE, fetch_socrata
 
-SLA_BASE = "https://data.ny.gov/resource/wg8y-fzsj.json"
-NYC_COUNTIES = ("NEW YORK", "KINGS", "BRONX", "QUEENS", "RICHMOND")
+NYC_COUNTY_FILTER = (
+    "upper(premisescounty) in ('NEW YORK','KINGS','QUEENS','BRONX','RICHMOND')"
+)
 
 
 def collect_liquor(limit: int = 10_000) -> list[dict]:
-    county_where = " OR ".join(f"county='{county}'" for county in NYC_COUNTIES)
+    rows = fetch_socrata(
+        "9s3h-dpkz",
+        where=NYC_COUNTY_FILTER,
+        limit=limit,
+        select="*",
+        base_url=SOCRATA_NY_STATE_BASE,
+    )
     events: list[dict] = []
-    offset = 0
-    while True:
-        response = httpx.get(
-            SLA_BASE,
-            params={"$limit": limit, "$offset": offset, "$where": county_where},
-            timeout=60,
+    for row in rows:
+        license_id = row.get("licensepermitid")
+        if not license_id:
+            continue
+        lat, lon = _coordinates(row.get("georeference"))
+        dba = row.get("dba") or row.get("legalname")
+        description = row.get("description", "")
+        events.append(
+            {
+                "id": f"sla_{license_id}",
+                "source": "liquor",
+                "event_type": description,
+                "occurred_at": row.get("effectivedate"),
+                "address": row.get("actualaddressofpremises", ""),
+                "bbl": None,
+                "bin": None,
+                "lat": lat,
+                "lon": lon,
+                "status": "ACTIVE",
+                "category": description,
+                "summary": compact_summary(dba, description),
+                "raw_json": row,
+            }
         )
-        response.raise_for_status()
-        rows: list[dict] = response.json()
-        for row in rows:
-            serial = row.get("serial_number") or row.get("license_serial_number")
-            if not serial:
-                continue
-            lat, lon = _coordinates(row.get("georeference"))
-            dba = row.get("dba") or row.get("doing_business_as")
-            license_type = row.get("license_type_name", "")
-            events.append(
-                {
-                    "id": f"sla_{serial}",
-                    "source": "liquor",
-                    "event_type": license_type,
-                    "occurred_at": row.get("effective_date"),
-                    "address": row.get("premises_address", ""),
-                    "bbl": None,
-                    "bin": None,
-                    "lat": lat,
-                    "lon": lon,
-                    "status": row.get("license_status"),
-                    "category": license_type,
-                    "summary": compact_summary(dba, license_type),
-                    "raw_json": row,
-                }
-            )
-        if len(rows) < limit:
-            break
-        offset += limit
     return events
 
 
@@ -61,4 +55,3 @@ def _coordinates(georeference: Any) -> tuple[float | None, float | None]:
     lon = to_float(coordinates[0])
     lat = to_float(coordinates[1])
     return lat, lon
-
