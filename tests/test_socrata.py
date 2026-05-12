@@ -116,24 +116,28 @@ def test_fetch_socrata_stops_after_empty_page(monkeypatch):
 
 
 def test_collect_liquor_paginates(monkeypatch):
+    """Liquor pagination is now provided by the shared fetch_socrata helper
+    (which is exercised by other tests in this file). This test verifies the
+    collector accepts the paginated payload and normalizes every row."""
     from nyc_pulse.collectors import liquor as liquor_mod
 
-    pages = [
-        [{"serial_number": str(i), "county": "NEW YORK", "license_type_name": "OP", "license_status": "Active", "effective_date": None, "premises_address": "", "georeference": None} for i in range(2)],
-        [{"serial_number": "2", "county": "NEW YORK", "license_type_name": "OP", "license_status": "Active", "effective_date": None, "premises_address": "", "georeference": None}],
+    payload = [
+        {
+            "licensepermitid": f"0001-22-{i:06d}",
+            "premisescounty": "New York",
+            "description": "Restaurant",
+            "legalname": "X",
+            "actualaddressofpremises": "",
+            "georeference": None,
+            "effectivedate": None,
+        }
+        for i in range(3)
     ]
-    call_count = 0
 
-    def fake_get(url, params, timeout):
-        nonlocal call_count
-        result = pages[call_count]
-        call_count += 1
-        return FakeResponse(result)
-
-    monkeypatch.setattr(liquor_mod.httpx, "get", fake_get)
+    monkeypatch.setattr(liquor_mod, "fetch_socrata", lambda *a, **k: payload)
 
     events = liquor_mod.collect_liquor(limit=2)
 
-    assert call_count == 2
     assert len(events) == 3
+    assert all(e["source"] == "liquor" for e in events)
 
