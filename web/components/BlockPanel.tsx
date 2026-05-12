@@ -169,6 +169,22 @@ export default function BlockPanel({
 }: BlockPanelProps) {
   const [saves, setSaves] = useState<SavedBlock[]>(() => loadSaves());
 
+  const isSaved = report
+    ? saves.some((s) => s.lat === report.location.lat && s.lon === report.location.lon)
+    : false;
+
+  function toggleSave() {
+    if (!report) return;
+    const label = `${report.location.lat.toFixed(5)}, ${report.location.lon.toFixed(5)}`;
+    const next = isSaved
+      ? saves.filter(
+          (s) => !(s.lat === report.location.lat && s.lon === report.location.lon),
+        )
+      : [...saves, { label, lat: report.location.lat, lon: report.location.lon }];
+    setSaves(next);
+    persistSaves(next);
+  }
+
   if (!report) {
     return (
       <aside className="flex h-full flex-col overflow-y-auto border-l border-neutral-200 bg-white">
@@ -302,6 +318,24 @@ export default function BlockPanel({
         {error ? (
           <p className="mt-3 text-sm text-red-700">{error}</p>
         ) : null}
+        <button
+          onClick={toggleSave}
+          className="mt-3 flex items-center gap-1.5 text-xs text-neutral-500 transition-colors hover:text-neutral-900"
+          aria-label={isSaved ? "Remove bookmark" : "Save this block"}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="h-4 w-4"
+            fill={isSaved ? "currentColor" : "none"}
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M5 3h14a1 1 0 0 1 1 1v17l-8-4-8 4V4a1 1 0 0 1 1-1z" />
+          </svg>
+          {isSaved ? "Saved" : "Save this block"}
+        </button>
       </div>
 
       <div className="space-y-4 p-5">
