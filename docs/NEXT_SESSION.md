@@ -6,6 +6,20 @@
 - PR #4 (Next.js frontend) — **merged to master** (squash commit `be3e06d`)
 - master is now stable with the full frontend
 
+## Next up
+
+### 1. Crime / Fire / Evictions signals (ready to implement)
+- Spec: `docs/superpowers/specs/2026-05-12-crime-fire-evictions-signals-design.md`
+- Plan: `docs/superpowers/plans/2026-05-12-crime-fire-evictions-signals.md` — 14 tasks, all code written
+- Execute with: point Codex or a new Claude session at the plan and run task-by-task
+- Branch to use: create `feature/crime-fire-evictions` off master
+
+### 2. Vercel deployment
+- Brainstorm not yet started — do after signals PR merges
+- Will need: `NEXT_PUBLIC_API_BASE_URL` env var pointing at Railway FastAPI URL, Vercel project linked to repo
+
+---
+
 ## What landed in PR #4
 
 - Next.js 14 + Tailwind + MapLibre frontend
