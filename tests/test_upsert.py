@@ -14,13 +14,21 @@ class FakeSession:
         self.commits = 0
 
     def execute(self, statement, params):
-        if params["id"] in self.ids:
-            return FakeResult(0)
-        self.ids.add(params["id"])
-        return FakeResult(1)
+        # Support both single-dict (legacy) and list-of-dicts (batched) signatures.
+        batch = params if isinstance(params, list) else [params]
+        inserted = 0
+        for p in batch:
+            if p["id"] in self.ids:
+                continue
+            self.ids.add(p["id"])
+            inserted += 1
+        return FakeResult(inserted)
 
     def commit(self):
         self.commits += 1
+
+    def rollback(self):
+        pass
 
 
 def test_upsert_events_is_idempotent_for_duplicate_ids():
