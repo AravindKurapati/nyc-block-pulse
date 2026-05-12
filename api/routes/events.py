@@ -10,14 +10,16 @@ from api.deps import get_db_session
 
 router = APIRouter(prefix="/api", tags=["events"])
 
-SignalName = Literal["construction", "nightlife", "housing", "restaurants", "quality_of_life"]
+SignalName = Literal["construction", "nightlife", "housing", "restaurants", "quality_of_life", "crime", "fire"]
 
 SIGNAL_SOURCES: dict[str, tuple[str, ...]] = {
     "construction": ("dob_permits",),
     "nightlife": ("liquor", "nyc_311", "restaurants"),
-    "housing": ("hpd_complaints", "hpd_violations", "nyc_311"),
+    "housing": ("hpd_complaints", "hpd_violations", "nyc_311", "evictions"),
     "restaurants": ("restaurants", "liquor", "dob_permits"),
     "quality_of_life": ("nyc_311",),
+    "crime": ("nypd_crime",),
+    "fire": ("fdny_fire",),
 }
 
 
