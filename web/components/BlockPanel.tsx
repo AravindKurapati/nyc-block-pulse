@@ -118,6 +118,48 @@ function AnimatedScore({ target }: { target: number }) {
   );
 }
 
+function SpotRow({
+  spot,
+  onFlyTo,
+  accent,
+}: {
+  spot: FlyToSpot;
+  onFlyTo: (lat: number, lon: number) => void;
+  accent?: "purple";
+}) {
+  return (
+    <li className="flex items-center justify-between gap-2">
+      <div className="min-w-0">
+        <div className="truncate text-sm font-medium text-neutral-900">
+          {spot.name}
+        </div>
+        <div
+          className={`text-xs ${accent === "purple" ? "text-purple-500" : "text-neutral-500"}`}
+        >
+          {spot.subtitle}
+        </div>
+      </div>
+      <button
+        onClick={() => onFlyTo(spot.lat, spot.lon)}
+        className="shrink-0 text-neutral-400 transition-colors hover:text-neutral-900"
+        aria-label={`Fly to ${spot.name}`}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          className="h-4 w-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M9 18l6-6-6-6" />
+        </svg>
+      </button>
+    </li>
+  );
+}
+
 export default function BlockPanel({
   report,
   isLoading = false,
@@ -131,23 +173,105 @@ export default function BlockPanel({
     return (
       <aside className="flex h-full flex-col overflow-y-auto border-l border-neutral-200 bg-white">
         <div className="border-b border-neutral-200 p-5">
-          <h2 className="text-lg font-semibold text-neutral-950">
-            Block Report
-          </h2>
+          <h2 className="text-lg font-semibold text-neutral-950">Block Report</h2>
         </div>
-        <div className="flex flex-1 flex-col justify-center p-6 text-sm leading-6 text-neutral-600">
-          <p className="text-base font-medium text-neutral-950">
+
+        <div className="p-5 text-sm leading-6 text-neutral-600">
+          <p className="font-medium text-neutral-950">
             Click the map or search an address
           </p>
-          <p className="mt-2">
+          <p className="mt-1 text-xs">
             The five-signal report will appear here with nearby evidence from
             the selected 90-day window.
           </p>
           {isLoading ? (
-            <p className="mt-4 text-neutral-500">Loading report...</p>
+            <p className="mt-3 text-neutral-500">Loading report...</p>
           ) : null}
-          {error ? <p className="mt-4 text-red-700">{error}</p> : null}
+          {error ? <p className="mt-3 text-red-700">{error}</p> : null}
         </div>
+
+        <div className="border-t border-neutral-100 px-5 py-4">
+          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+            ★ Aru&apos;s Picks
+          </div>
+          <ul className="space-y-3">
+            {ARU_PICKS.map((spot) => (
+              <SpotRow key={spot.name} spot={spot} onFlyTo={onFlyTo} />
+            ))}
+          </ul>
+        </div>
+
+        <div className="border-t border-neutral-100 px-5 py-4">
+          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-purple-500">
+            ◆ NYU Buildings
+          </div>
+          <ul className="space-y-3">
+            {NYU_BUILDINGS.map((spot) => (
+              <SpotRow key={spot.name} spot={spot} onFlyTo={onFlyTo} accent="purple" />
+            ))}
+          </ul>
+        </div>
+
+        {saves.length > 0 && (
+          <div className="border-t border-neutral-100 px-5 py-4">
+            <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              ♥ Your Saves
+            </div>
+            <ul className="space-y-3">
+              {saves.map((s) => (
+                <li key={`${s.lat},${s.lon}`} className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-neutral-900">
+                      {s.label}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      onClick={() => onFlyTo(s.lat, s.lon)}
+                      className="text-neutral-400 transition-colors hover:text-neutral-900"
+                      aria-label="Fly to saved block"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M9 18l6-6-6-6" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => {
+                        const next = saves.filter(
+                          (x) => !(x.lat === s.lat && x.lon === s.lon),
+                        );
+                        setSaves(next);
+                        persistSaves(next);
+                      }}
+                      className="text-neutral-400 transition-colors hover:text-red-500"
+                      aria-label="Remove save"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M18 6L6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </aside>
     );
   }
