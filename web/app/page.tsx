@@ -45,6 +45,7 @@ export default function Home() {
   const eventAbortRef = useRef<AbortController | null>(null);
   const blockAbortRef = useRef<AbortController | null>(null);
   const boundsDebounceRef = useRef<number | null>(null);
+  const pendingSignalRef = useRef<SignalName | null>(null);
 
   useEffect(() => {
     signalRef.current = signal;
@@ -74,6 +75,12 @@ export default function Home() {
   const handleBoundsChange = useCallback(
     (bbox: BBox) => {
       bboxRef.current = bbox;
+      const pendingSignal = pendingSignalRef.current;
+      if (pendingSignal) {
+        pendingSignalRef.current = null;
+        requestEvents(pendingSignal, bbox);
+        return;
+      }
       if (boundsDebounceRef.current) {
         window.clearTimeout(boundsDebounceRef.current);
       }
@@ -88,6 +95,8 @@ export default function Home() {
     const bbox = bboxRef.current;
     if (bbox) {
       requestEvents(signal, bbox);
+    } else {
+      pendingSignalRef.current = signal;
     }
     document
       .getElementById(`signal-${signal}`)

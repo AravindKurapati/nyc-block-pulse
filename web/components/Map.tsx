@@ -54,6 +54,7 @@ export default function PulseMap({
   const markerRef = useRef<Marker | null>(null);
   const clickHandlerRef = useRef(onMapClick);
   const boundsHandlerRef = useRef(onBoundsChange);
+  const heatmapDataRef = useRef<EventsGeoJSON | null>(heatmapGeoJSON);
 
   useEffect(() => {
     clickHandlerRef.current = onMapClick;
@@ -62,6 +63,10 @@ export default function PulseMap({
   useEffect(() => {
     boundsHandlerRef.current = onBoundsChange;
   }, [onBoundsChange]);
+
+  useEffect(() => {
+    heatmapDataRef.current = heatmapGeoJSON;
+  }, [heatmapGeoJSON]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
@@ -86,7 +91,7 @@ export default function PulseMap({
     map.on("load", () => {
       map.addSource(HEATMAP_SOURCE_ID, {
         type: "geojson",
-        data: emptyFeatureCollection(),
+        data: heatmapDataRef.current ?? emptyFeatureCollection(),
       });
       map.addLayer({
         id: HEATMAP_LAYER_ID,
@@ -159,11 +164,26 @@ export default function PulseMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) {
+    if (!map) {
       return;
     }
-    const source = map.getSource(HEATMAP_SOURCE_ID) as GeoJSONSource | undefined;
-    source?.setData(heatmapGeoJSON ?? emptyFeatureCollection());
+
+    const applyHeatmap = () => {
+      const source = map.getSource(HEATMAP_SOURCE_ID) as
+        | GeoJSONSource
+        | undefined;
+      source?.setData(heatmapDataRef.current ?? emptyFeatureCollection());
+    };
+
+    if (map.isStyleLoaded() && map.getSource(HEATMAP_SOURCE_ID)) {
+      applyHeatmap();
+      return;
+    }
+
+    map.once("load", applyHeatmap);
+    return () => {
+      map.off("load", applyHeatmap);
+    };
   }, [heatmapGeoJSON]);
 
   useEffect(() => {

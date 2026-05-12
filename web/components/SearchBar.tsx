@@ -78,6 +78,12 @@ export default function SearchBar({ onSelect }: SearchBarProps) {
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Search address or intersection"
         autoComplete="off"
+        onBlur={() => {
+          window.setTimeout(() => {
+            setResults([]);
+            setError(null);
+          }, 100);
+        }}
         className="h-10 w-full rounded border border-neutral-300 bg-white px-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-neutral-950 focus:ring-2 focus:ring-neutral-950/10"
       />
       {showMenu ? (

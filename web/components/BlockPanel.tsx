@@ -32,6 +32,10 @@ function formatDate(value: string | null) {
   return value.slice(0, 10);
 }
 
+function formatScore(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 export default function BlockPanel({
   report,
   isLoading = false,
@@ -70,13 +74,13 @@ export default function BlockPanel({
             {report.location.lat.toFixed(5)}, {report.location.lon.toFixed(5)}
           </p>
           <p>
-            {report.location.borough ?? "NYC"} · {report.window_days} days ·{" "}
+            {report.location.borough ?? "NYC"} - {report.window_days} days -{" "}
             {report.radius_ft} ft
           </p>
           {report.location.bbl || report.location.bin ? (
             <p className="text-xs text-neutral-500">
               {report.location.bbl ? `BBL ${report.location.bbl}` : null}
-              {report.location.bbl && report.location.bin ? " · " : null}
+              {report.location.bbl && report.location.bin ? " - " : null}
               {report.location.bin ? `BIN ${report.location.bin}` : null}
             </p>
           ) : null}
@@ -109,7 +113,7 @@ export default function BlockPanel({
                 </div>
                 <div className="text-right">
                   <div className="text-2xl font-semibold text-neutral-950">
-                    {signal.score}
+                    {formatScore(signal.score)}
                   </div>
                   <div className="text-xs text-neutral-500">
                     {signal.count} events
@@ -133,7 +137,7 @@ export default function BlockPanel({
                         className="text-sm leading-5 text-neutral-700"
                       >
                         <div className="text-xs text-neutral-500">
-                          {formatDate(item.date)} · {item.source ?? "source"}
+                          {formatDate(item.date)} - {item.source ?? "source"}
                         </div>
                         <div>{item.summary ?? item.id ?? "event"}</div>
                       </li>
