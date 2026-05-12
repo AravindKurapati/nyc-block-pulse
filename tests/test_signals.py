@@ -71,3 +71,41 @@ def test_score_crime_weights_by_severity(monkeypatch):
     assert result["score"] == 3.5
     assert result["count"] == 3
     assert len(result["evidence"]) == 3
+
+
+def test_score_fire_flat_count(monkeypatch):
+    from nyc_pulse.signals import fire
+
+    monkeypatch.setattr(
+        fire,
+        "fetch_nearby_events",
+        lambda *args, **kwargs: [
+            {
+                "id": "fire_1",
+                "source": "fdny_fire",
+                "event_type": "fire_incident",
+                "summary": "111 - Building fire",
+                "occurred_at": "2026-05-01",
+                "category": "111 - Building fire",
+                "status": None,
+                "raw_json": {},
+            },
+            {
+                "id": "fire_2",
+                "source": "fdny_fire",
+                "event_type": "fire_incident",
+                "summary": "321 - EMS call",
+                "occurred_at": "2026-05-02",
+                "category": "321 - EMS call",
+                "status": None,
+                "raw_json": {},
+            },
+        ],
+    )
+
+    result = fire.score_fire(40.7, -73.9)
+
+    assert result["signal_type"] == "fire_incidents"
+    assert result["score"] == 2.0
+    assert result["count"] == 2
+    assert len(result["evidence"]) == 2
