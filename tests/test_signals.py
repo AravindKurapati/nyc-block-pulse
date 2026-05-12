@@ -109,3 +109,31 @@ def test_score_fire_flat_count(monkeypatch):
     assert result["score"] == 2.0
     assert result["count"] == 2
     assert len(result["evidence"]) == 2
+
+
+def test_score_housing_includes_evictions(monkeypatch):
+    from nyc_pulse.signals import housing
+
+    called_with_sources = []
+
+    def fake_fetch(sources, lat, lon, radius_ft, window_days, session=None):
+        called_with_sources.extend(sources)
+        return [
+            {
+                "id": "eviction_1",
+                "source": "evictions",
+                "event_type": "eviction",
+                "summary": "Eviction - 123 Main St",
+                "occurred_at": "2026-05-01",
+                "category": "Residential",
+                "status": None,
+                "raw_json": {},
+            },
+        ]
+
+    monkeypatch.setattr(housing, "fetch_nearby_events", fake_fetch)
+    result = housing.score_housing(40.7, -73.9)
+
+    assert "evictions" in called_with_sources
+    assert result["signal_type"] == "housing_distress"
+    assert result["count"] >= 1
