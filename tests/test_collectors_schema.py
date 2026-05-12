@@ -188,3 +188,59 @@ def test_liquor_normalizes_new_schema(monkeypatch):
     assert e["lon"] == -73.99
     # Description-based event_type (Restaurant/Liquor Store/etc.)
     assert "Restaurant" in (e["event_type"] or e["category"] or "")
+
+
+def test_nypd_crime_uses_correct_dataset_and_fields(monkeypatch):
+    captured = {}
+
+    def fake_fetch(dataset_id, where, select, limit=50_000, offset=0):
+        captured["dataset_id"] = dataset_id
+        captured["where"] = where
+        captured["select"] = select
+        return []
+
+    from nyc_pulse.collectors import nypd_crime
+
+    monkeypatch.setattr(nypd_crime, "fetch_socrata", fake_fetch)
+    nypd_crime.collect_nypd_crime(days=7)
+
+    assert captured["dataset_id"] == "qgea-i56i"
+    assert "cmplnt_fr_dt" in captured["where"]
+    select_fields = {f.strip() for f in captured["select"].split(",")}
+    for required in (
+        "cmplnt_num",
+        "cmplnt_fr_dt",
+        "ofns_desc",
+        "law_cat_cd",
+        "latitude",
+        "longitude",
+    ):
+        assert required in select_fields, f"Missing field: {required}"
+
+
+def test_nypd_crime_normalizes_row(monkeypatch):
+    from nyc_pulse.collectors import nypd_crime
+
+    def fake_fetch(*a, **k):
+        return [
+            {
+                "cmplnt_num": "123456789",
+                "cmplnt_fr_dt": "2026-05-01T00:00:00",
+                "ofns_desc": "ASSAULT 3 & RELATED OFFENSES",
+                "law_cat_cd": "MISDEMEANOR",
+                "latitude": "40.73082",
+                "longitude": "-73.99763",
+                "boro_nm": "MANHATTAN",
+            }
+        ]
+
+    monkeypatch.setattr(nypd_crime, "fetch_socrata", fake_fetch)
+    events = nypd_crime.collect_nypd_crime(days=7)
+
+    assert len(events) == 1
+    e = events[0]
+    assert e["id"] == "crime_123456789"
+    assert e["source"] == "nypd_crime"
+    assert e["event_type"] == "misdemeanor"
+    assert e["lat"] == 40.73082
+    assert e["lon"] == -73.99763
