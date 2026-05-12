@@ -7,13 +7,13 @@ import httpx
 
 from ..config import settings
 
-GEOCLIENT_BASE = "https://api.cityofnewyork.us/geoclient/v2"
+GEOCLIENT_BASE = "https://api.nyc.gov/geo/geoclient/v2"
 DEFAULT_BOROUGH = "Manhattan"
 
 
 def resolve_address(address: str) -> dict[str, Any] | None:
     """Resolve an address or intersection to lat/lon and, when available, BBL/BIN."""
-    if not settings.nyc_geoclient_app_id or not settings.nyc_geoclient_app_key:
+    if not settings.nyc_geoclient_app_key:
         return None
 
     if "&" in address or re.search(r"\band\b", address, flags=re.IGNORECASE):
@@ -33,9 +33,8 @@ def _resolve_street(address: str) -> dict[str, Any] | None:
             "houseNumber": house_number,
             "street": street,
             "borough": borough,
-            "app_id": settings.nyc_geoclient_app_id,
-            "app_key": settings.nyc_geoclient_app_key,
         },
+        headers={"Ocp-Apim-Subscription-Key": settings.nyc_geoclient_app_key},
         timeout=10,
     )
     if response.status_code != 200:
@@ -65,9 +64,8 @@ def _resolve_intersection(address: str) -> dict[str, Any] | None:
             "crossStreetOne": parts[0],
             "crossStreetTwo": parts[1],
             "borough": borough,
-            "app_id": settings.nyc_geoclient_app_id,
-            "app_key": settings.nyc_geoclient_app_key,
         },
+        headers={"Ocp-Apim-Subscription-Key": settings.nyc_geoclient_app_key},
         timeout=10,
     )
     if response.status_code != 200:

@@ -24,7 +24,6 @@ def test_resolve_address_returns_geoclient_fields(monkeypatch):
         captured.update({"url": url, "params": params, "timeout": timeout})
         return FakeResponse()
 
-    monkeypatch.setattr(address.settings, "nyc_geoclient_app_id", "id")
     monkeypatch.setattr(address.settings, "nyc_geoclient_app_key", "key")
     monkeypatch.setattr(address.httpx, "get", fake_get)
 
@@ -43,7 +42,6 @@ def test_resolve_address_returns_geoclient_fields(monkeypatch):
 
 
 def test_resolve_address_without_credentials_returns_none(monkeypatch):
-    monkeypatch.setattr(address.settings, "nyc_geoclient_app_id", "")
     monkeypatch.setattr(address.settings, "nyc_geoclient_app_key", "")
 
     assert address.resolve_address("123 Ludlow St") is None
