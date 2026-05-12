@@ -20,8 +20,8 @@ class FakeResponse:
 def test_resolve_address_returns_geoclient_fields(monkeypatch):
     captured = {}
 
-    def fake_get(url, params, timeout):
-        captured.update({"url": url, "params": params, "timeout": timeout})
+    def fake_get(url, params, timeout, headers=None):
+        captured.update({"url": url, "params": params, "timeout": timeout, "headers": headers})
         return FakeResponse()
 
     monkeypatch.setattr(address.settings, "nyc_geoclient_app_key", "key")

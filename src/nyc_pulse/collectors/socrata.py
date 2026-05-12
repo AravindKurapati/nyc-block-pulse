@@ -8,6 +8,7 @@ import httpx
 from ..config import settings
 
 SOCRATA_BASE = "https://data.cityofnewyork.us/resource"
+SOCRATA_NY_STATE_BASE = "https://data.ny.gov/resource"
 
 
 def fetch_socrata(
@@ -16,8 +17,9 @@ def fetch_socrata(
     limit: int = 50_000,
     offset: int = 0,
     select: str = "*",
+    base_url: str = SOCRATA_BASE,
 ) -> list[dict[str, Any]]:
-    url = f"{SOCRATA_BASE}/{dataset_id}.json"
+    url = f"{base_url}/{dataset_id}.json"
     headers = {}
     if settings.nyc_open_data_app_token:
         headers["X-App-Token"] = settings.nyc_open_data_app_token

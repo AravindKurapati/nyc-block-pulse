@@ -58,6 +58,7 @@ def update(
                 inserted = upsert_events(session, events)
                 console.print(f"[cyan]{name}:[/cyan] {len(events)} fetched, {inserted} new rows")
             except Exception as exc:
+                session.rollback()
                 console.print(f"[yellow]{name}: skipped — {exc}[/yellow]")
     finally:
         session.close()
