@@ -3,7 +3,9 @@ export type SignalName =
   | "nightlife"
   | "housing"
   | "restaurants"
-  | "quality_of_life";
+  | "quality_of_life"
+  | "crime"
+  | "fire";
 
 export type EventFeature = {
   type: "Feature";

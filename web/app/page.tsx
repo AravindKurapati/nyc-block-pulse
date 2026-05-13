@@ -26,7 +26,7 @@ function isAbortError(error: unknown) {
 }
 
 export default function Home() {
-  const [signal, setSignal] = useState<SignalName>(DEFAULT_SIGNAL);
+  const [signals, setSignals] = useState<SignalName[]>([DEFAULT_SIGNAL]);
   const [heatmapGeoJSON, setHeatmapGeoJSON] = useState<EventsGeoJSON | null>(
     null,
   );
@@ -40,28 +40,43 @@ export default function Home() {
   const [eventError, setEventError] = useState<string | null>(null);
   const panelError = blockError ?? eventError;
 
-  const signalRef = useRef(signal);
+  const signalsRef = useRef(signals);
   const bboxRef = useRef<BBox | null>(null);
   const eventAbortRef = useRef<AbortController | null>(null);
   const blockAbortRef = useRef<AbortController | null>(null);
   const boundsDebounceRef = useRef<number | null>(null);
-  const pendingSignalRef = useRef<SignalName | null>(null);
+  const pendingSignalsRef = useRef<SignalName[] | null>(null);
 
   useEffect(() => {
-    signalRef.current = signal;
-  }, [signal]);
+    signalsRef.current = signals;
+  }, [signals]);
 
-  const requestEvents = useCallback((nextSignal: SignalName, bbox: BBox) => {
+  const requestEvents = useCallback((nextSignals: SignalName[], bbox: BBox) => {
     eventAbortRef.current?.abort();
     const controller = new AbortController();
     eventAbortRef.current = controller;
     setEventError(null);
 
-    fetchEvents(
-      { signal: nextSignal, bbox, days: DEFAULT_DAYS, limit: 5000 },
-      controller.signal,
+    Promise.all(
+      nextSignals.map((nextSignal) =>
+        fetchEvents(
+          { signal: nextSignal, bbox, days: DEFAULT_DAYS, limit: 5000 },
+          controller.signal,
+        ),
+      ),
     )
-      .then((data) => setHeatmapGeoJSON(data))
+      .then((results) => {
+        const merged: EventsGeoJSON = {
+          type: "FeatureCollection",
+          features: results.flatMap((result) => result.features),
+          sampled: results.some((result) => result.sampled),
+          total_match: results.reduce(
+            (total, result) => total + result.total_match,
+            0,
+          ),
+        };
+        setHeatmapGeoJSON(merged);
+      })
       .catch((error: unknown) => {
         if (isAbortError(error)) {
           return;
@@ -75,17 +90,17 @@ export default function Home() {
   const handleBoundsChange = useCallback(
     (bbox: BBox) => {
       bboxRef.current = bbox;
-      const pendingSignal = pendingSignalRef.current;
-      if (pendingSignal) {
-        pendingSignalRef.current = null;
-        requestEvents(pendingSignal, bbox);
+      const pendingSignals = pendingSignalsRef.current;
+      if (pendingSignals) {
+        pendingSignalsRef.current = null;
+        requestEvents(pendingSignals, bbox);
         return;
       }
       if (boundsDebounceRef.current) {
         window.clearTimeout(boundsDebounceRef.current);
       }
       boundsDebounceRef.current = window.setTimeout(() => {
-        requestEvents(signalRef.current, bbox);
+        requestEvents(signalsRef.current, bbox);
       }, 300);
     },
     [requestEvents],
@@ -94,14 +109,16 @@ export default function Home() {
   useEffect(() => {
     const bbox = bboxRef.current;
     if (bbox) {
-      requestEvents(signal, bbox);
+      requestEvents(signals, bbox);
     } else {
-      pendingSignalRef.current = signal;
+      pendingSignalsRef.current = signals;
     }
-    document
-      .getElementById(`signal-${signal}`)
-      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [requestEvents, signal]);
+    if (signals.length === 1) {
+      document
+        .getElementById(`signal-${signals[0]}`)
+        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [requestEvents, signals]);
 
   const loadBlock = useCallback((lat: number, lon: number) => {
     blockAbortRef.current?.abort();
@@ -171,7 +188,7 @@ export default function Home() {
           />
           <div className="pointer-events-none absolute bottom-4 left-4 z-10">
             <div className="pointer-events-auto">
-              <SignalToggle signal={signal} onChange={setSignal} />
+              <SignalToggle signals={signals} onChange={setSignals} />
             </div>
           </div>
         </section>
@@ -181,7 +198,7 @@ export default function Home() {
             report={report}
             isLoading={isBlockLoading}
             error={panelError}
-            selectedSignal={signal}
+            selectedSignals={signals}
             onFlyTo={loadBlock}
           />
         </div>
