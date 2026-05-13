@@ -188,3 +188,169 @@ def test_liquor_normalizes_new_schema(monkeypatch):
     assert e["lon"] == -73.99
     # Description-based event_type (Restaurant/Liquor Store/etc.)
     assert "Restaurant" in (e["event_type"] or e["category"] or "")
+
+
+def test_nypd_crime_uses_correct_dataset_and_fields(monkeypatch):
+    captured = {}
+
+    def fake_fetch(dataset_id, where, select, limit=50_000, offset=0):
+        captured["dataset_id"] = dataset_id
+        captured["where"] = where
+        captured["select"] = select
+        return []
+
+    from nyc_pulse.collectors import nypd_crime
+
+    monkeypatch.setattr(nypd_crime, "fetch_socrata", fake_fetch)
+    nypd_crime.collect_nypd_crime(days=7)
+
+    assert captured["dataset_id"] == "qgea-i56i"
+    assert "cmplnt_fr_dt" in captured["where"]
+    select_fields = {f.strip() for f in captured["select"].split(",")}
+    for required in (
+        "cmplnt_num",
+        "cmplnt_fr_dt",
+        "ofns_desc",
+        "law_cat_cd",
+        "latitude",
+        "longitude",
+    ):
+        assert required in select_fields, f"Missing field: {required}"
+
+
+def test_nypd_crime_normalizes_row(monkeypatch):
+    from nyc_pulse.collectors import nypd_crime
+
+    def fake_fetch(*a, **k):
+        return [
+            {
+                "cmplnt_num": "123456789",
+                "cmplnt_fr_dt": "2026-05-01T00:00:00",
+                "ofns_desc": "ASSAULT 3 & RELATED OFFENSES",
+                "law_cat_cd": "MISDEMEANOR",
+                "latitude": "40.73082",
+                "longitude": "-73.99763",
+                "boro_nm": "MANHATTAN",
+            }
+        ]
+
+    monkeypatch.setattr(nypd_crime, "fetch_socrata", fake_fetch)
+    events = nypd_crime.collect_nypd_crime(days=7)
+
+    assert len(events) == 1
+    e = events[0]
+    assert e["id"] == "crime_123456789"
+    assert e["source"] == "nypd_crime"
+    assert e["event_type"] == "misdemeanor"
+    assert e["lat"] == 40.73082
+    assert e["lon"] == -73.99763
+
+
+def test_fdny_fire_uses_correct_dataset_and_fields(monkeypatch):
+    captured = {}
+
+    def fake_fetch(dataset_id, where, select, limit=50_000, offset=0):
+        captured["dataset_id"] = dataset_id
+        captured["where"] = where
+        captured["select"] = select
+        return []
+
+    from nyc_pulse.collectors import fdny_fire
+
+    monkeypatch.setattr(fdny_fire, "fetch_socrata", fake_fetch)
+    fdny_fire.collect_fdny_fire(days=7)
+
+    assert captured["dataset_id"] == "erm2-nwe9"
+    assert "incident_datetime" in captured["where"]
+    select_fields = {f.strip() for f in captured["select"].split(",")}
+    for required in (
+        "starfire_incident_id",
+        "incident_datetime",
+        "incident_type_desc",
+        "latitude",
+        "longitude",
+    ):
+        assert required in select_fields, f"Missing field: {required}"
+
+
+def test_fdny_fire_normalizes_row(monkeypatch):
+    from nyc_pulse.collectors import fdny_fire
+
+    def fake_fetch(*a, **k):
+        return [
+            {
+                "starfire_incident_id": "987654",
+                "incident_datetime": "2026-05-02T14:30:00",
+                "incident_type_desc": "300 - Rescue, EMS incident, other",
+                "latitude": "40.74220",
+                "longitude": "-73.97440",
+                "borough_desc": "3 - Manhattan",
+            }
+        ]
+
+    monkeypatch.setattr(fdny_fire, "fetch_socrata", fake_fetch)
+    events = fdny_fire.collect_fdny_fire(days=7)
+
+    assert len(events) == 1
+    e = events[0]
+    assert e["id"] == "fire_987654"
+    assert e["source"] == "fdny_fire"
+    assert e["event_type"] == "fire_incident"
+    assert e["lat"] == 40.74220
+    assert e["lon"] == -73.97440
+
+
+def test_evictions_uses_correct_dataset_and_fields(monkeypatch):
+    captured = {}
+
+    def fake_fetch(dataset_id, where, select, limit=50_000, offset=0):
+        captured["dataset_id"] = dataset_id
+        captured["where"] = where
+        captured["select"] = select
+        return []
+
+    from nyc_pulse.collectors import evictions
+
+    monkeypatch.setattr(evictions, "fetch_socrata", fake_fetch)
+    evictions.collect_evictions(days=7)
+
+    assert captured["dataset_id"] == "6z8x-vjye"
+    assert "executed_date" in captured["where"]
+    select_fields = {f.strip() for f in captured["select"].split(",")}
+    for required in (
+        "court_index_number",
+        "executed_date",
+        "eviction_address",
+        "latitude",
+        "longitude",
+    ):
+        assert required in select_fields, f"Missing field: {required}"
+
+
+def test_evictions_normalizes_row(monkeypatch):
+    from nyc_pulse.collectors import evictions
+
+    def fake_fetch(*a, **k):
+        return [
+            {
+                "court_index_number": "LT-001234-26/BX",
+                "executed_date": "2026-04-15T00:00:00",
+                "eviction_address": "100 MAIN ST",
+                "latitude": "40.85460",
+                "longitude": "-73.89030",
+                "borough": "BRONX",
+                "residential_commercial_ind": "Residential",
+            }
+        ]
+
+    monkeypatch.setattr(evictions, "fetch_socrata", fake_fetch)
+    events = evictions.collect_evictions(days=7)
+
+    assert len(events) == 1
+    e = events[0]
+    assert e["id"] == "eviction_LT-001234-26/BX_2026-04-15"
+    assert e["source"] == "evictions"
+    assert e["event_type"] == "eviction"
+    assert e["address"] == "100 MAIN ST"
+    assert e["lat"] == 40.85460
+    assert e["lon"] == -73.89030
