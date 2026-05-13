@@ -6,7 +6,14 @@ from ._common import evidence, fetch_nearby_events
 
 
 def score_housing(lat: float, lon: float, radius_ft: int = 500, window_days: int = 90, session: Session | None = None) -> dict:
-    rows = fetch_nearby_events(["hpd_complaints", "hpd_violations", "nyc_311"], lat, lon, radius_ft, window_days, session=session)
+    rows = fetch_nearby_events(
+        ["hpd_complaints", "hpd_violations", "nyc_311", "evictions"],
+        lat,
+        lon,
+        radius_ft,
+        window_days,
+        session=session,
+    )
     terms = ("heat", "hot water", "mold", "paint", "leak", "pest", "rodent", "elevator")
     relevant = [
         row
