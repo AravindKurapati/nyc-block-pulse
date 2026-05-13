@@ -16,6 +16,8 @@ from .config import settings
 from .db import get_session, upsert_events
 
 app = typer.Typer()
+agent_app = typer.Typer(help="Autonomous dataset discovery and monitoring.")
+app.add_typer(agent_app, name="agent")
 console = Console()
 
 
@@ -105,6 +107,102 @@ def block_report(
 
     report = render_report(query, loc, signals, days)
     console.print(Markdown(report))
+
+
+@agent_app.command("discover")
+def agent_discover(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Run all steps except git/PR operations."),
+) -> None:
+    """Scan NYC Open Data catalog, evaluate datasets, generate collectors, open PRs."""
+    from .agent.catalog import fetch_candidates
+    from .agent.codegen import generate_files
+    from .agent.evaluate import evaluate_dataset
+    from .agent.pr import create_pr
+    from .agent.state import load_state, save_state
+    from .agent.validate import validate_generated
+    from .agent.wire import wire_all
+
+    state = load_state()
+    already_evaluated = set(state["evaluated"].keys())
+
+    console.print(f"[cyan]Fetching catalog candidates (skipping {len(already_evaluated)} known IDs)...[/cyan]")
+    candidates = fetch_candidates(already_evaluated)
+    console.print(f"[cyan]Found {len(candidates)} pre-filtered candidates.[/cyan]")
+
+    for candidate in candidates:
+        dataset_id = candidate["id"]
+        console.print(f"\n[dim]Evaluating {dataset_id}: {candidate['name'][:60]}[/dim]")
+
+        eval_result = evaluate_dataset(candidate)
+        if eval_result is None:
+            state["evaluated"][dataset_id] = {"status": "rejected", "score": 0, "rationale": "parse_failure"}
+            save_state(state)
+            console.print("  [red]Parse failure - skipping.[/red]")
+            continue
+
+        if eval_result["score"] < 7:
+            state["evaluated"][dataset_id] = {
+                "status": "rejected",
+                "score": eval_result["score"],
+                "rationale": eval_result["rationale"],
+            }
+            save_state(state)
+            console.print(f"  [yellow]Rejected (score {eval_result['score']}/10): {eval_result['rationale']}[/yellow]")
+            continue
+
+        console.print(f"  [green]Score {eval_result['score']}/10 - {eval_result['signal_name']}[/green]")
+        console.print("  Generating code...")
+        files = generate_files(eval_result)
+        if not files:
+            state["evaluated"][dataset_id] = {"status": "codegen_failed", "score": eval_result["score"]}
+            save_state(state)
+            console.print("  [red]Code generation failed.[/red]")
+            continue
+
+        console.print("  Validating generated tests...")
+        passed = validate_generated(eval_result["signal_name"], files)
+        if not passed:
+            state["evaluated"][dataset_id] = {
+                "status": "validation_failed",
+                "score": eval_result["score"],
+                "signal_name": eval_result["signal_name"],
+            }
+            save_state(state)
+            console.print("  [red]Validation failed - skipping PR.[/red]")
+            continue
+
+        if not dry_run:
+            wire_all(eval_result["signal_name"], dataset_id)
+
+        pr_url = create_pr(eval_result["signal_name"], dataset_id, eval_result, files, dry_run=dry_run)
+        state["evaluated"][dataset_id] = {
+            "status": "approved",
+            "score": eval_result["score"],
+            "signal_name": eval_result["signal_name"],
+            "pr": pr_url,
+        }
+        save_state(state)
+        console.print(f"  [green]PR opened: {pr_url or '(dry-run)'}[/green]")
+
+    if not dry_run:
+        import subprocess
+        subprocess.run(["git", "push", "origin", "HEAD:master"], capture_output=True)
+
+    console.print("\n[green]Done.[/green]")
+
+
+@agent_app.command("monitor")
+def agent_monitor(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print issues without creating them."),
+) -> None:
+    """Check data source health and open GitHub issues for dead sources."""
+    from .agent.monitor import run_monitor
+
+    dead = run_monitor(dry_run=dry_run)
+    if dead:
+        console.print(f"[yellow]Dead sources: {', '.join(dead)}[/yellow]")
+    else:
+        console.print("[green]All sources healthy.[/green]")
 
 
 if __name__ == "__main__":
