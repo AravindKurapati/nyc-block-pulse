@@ -7,6 +7,7 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from api.deps import get_db_session
+from nyc_pulse.normalize.geography import feet_to_meters
 
 router = APIRouter(prefix="/api", tags=["events"])
 
@@ -148,6 +149,61 @@ def _feature(row: dict[str, Any]) -> dict[str, Any]:
             "occurred_at": row.get("occurred_at"),
         },
     }
+
+
+@router.get("/signal-trend")
+def signal_trend(
+    signal: SignalName,
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    radius_ft: int = Query(default=500, gt=0),
+    days: int = Query(default=90, ge=1, le=366),
+    session: Session = Depends(get_db_session),
+) -> list[dict[str, Any]]:
+    statement = (
+        text(
+            """
+            WITH day_series AS (
+                SELECT generate_series(
+                    (current_date - ((:days - 1) * interval '1 day'))::date,
+                    current_date,
+                    interval '1 day'
+                )::date AS day
+            ),
+            event_counts AS (
+                SELECT occurred_at::date AS day, count(*)::integer AS count
+                FROM events
+                WHERE source IN :sources
+                  AND occurred_at >= now() - (:days * interval '1 day')
+                  AND geom IS NOT NULL
+                  AND ST_DWithin(
+                      geom::geography,
+                      ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
+                      :radius_m
+                  )
+                GROUP BY occurred_at::date
+            )
+            SELECT
+                to_char(day_series.day, 'YYYY-MM-DD') AS date,
+                COALESCE(event_counts.count, 0)::integer AS count
+            FROM day_series
+            LEFT JOIN event_counts ON event_counts.day = day_series.day
+            ORDER BY day_series.day
+            """
+        )
+        .bindparams(bindparam("sources", expanding=True))
+    )
+    rows = session.execute(
+        statement,
+        {
+            "sources": SIGNAL_SOURCES[signal],
+            "lat": lat,
+            "lon": lon,
+            "radius_m": feet_to_meters(radius_ft),
+            "days": days,
+        },
+    ).fetchall()
+    return [dict(row._mapping) for row in rows]
 
 
 @router.get("/events")
