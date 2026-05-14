@@ -5,6 +5,8 @@ import { HeatmapLayer } from "@deck.gl/aggregation-layers";
 import { H3HexagonLayer } from "@deck.gl/geo-layers";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { latLngToCell } from "h3-js";
+import { circle } from "@turf/turf";
+import type { FeatureCollection, Polygon } from "geojson";
 import maplibregl, {
   type GeoJSONSource,
   type IControl,
@@ -23,6 +25,9 @@ const H3_RESOLUTION = 9;
 const DEMOGRAPHICS_SOURCE_ID = "tract-demographics";
 const DEMOGRAPHICS_FILL_LAYER_ID = "tract-demographics-fill";
 const DEMOGRAPHICS_LINE_LAYER_ID = "tract-demographics-line";
+const RADIUS_RING_SOURCE_ID = "selected-radius-ring";
+const RADIUS_RING_FILL_LAYER_ID = "selected-radius-ring-fill";
+const RADIUS_RING_LINE_LAYER_ID = "selected-radius-ring-line";
 const NYU_SOURCE_ID = "nyu-buildings";
 const NYU_CIRCLE_LAYER_ID = "nyu-building-circles";
 const NYU_LABEL_LAYER_ID = "nyu-building-labels";
@@ -37,6 +42,7 @@ type PulseMapProps = {
   demographicsGeoJSON: DemographicsGeoJSON | null;
   viewMode: MapViewMode;
   selectedLocation: SelectedLocation;
+  selectedRadiusFt: number;
   onMapClick: (lat: number, lon: number) => void;
   onBoundsChange: (bbox: BBox) => void;
 };
@@ -51,6 +57,8 @@ type EventHex = {
   count: number;
 };
 
+type RadiusRingGeoJSON = FeatureCollection<Polygon, { radius_ft?: number }>;
+
 function boundsToBBox(bounds: LngLatBounds): BBox {
   return {
     minLon: bounds.getWest(),
@@ -64,6 +72,29 @@ function emptyDemographicsFeatureCollection(): DemographicsGeoJSON {
   return {
     type: "FeatureCollection",
     features: [],
+  };
+}
+
+function radiusRingGeoJSON(
+  location: SelectedLocation,
+  radiusFt: number,
+): RadiusRingGeoJSON {
+  if (!location) {
+    return {
+      type: "FeatureCollection",
+      features: [],
+    };
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: [
+      circle([location.lon, location.lat], radiusFt / 5280, {
+        steps: 96,
+        units: "miles",
+        properties: { radius_ft: radiusFt },
+      }) as RadiusRingGeoJSON["features"][number],
+    ],
   };
 }
 
@@ -150,6 +181,7 @@ export default function PulseMap({
   demographicsGeoJSON,
   viewMode,
   selectedLocation,
+  selectedRadiusFt,
   onMapClick,
   onBoundsChange,
 }: PulseMapProps) {
@@ -162,6 +194,9 @@ export default function PulseMap({
   const heatmapDataRef = useRef<EventsGeoJSON | null>(heatmapGeoJSON);
   const demographicsDataRef = useRef<DemographicsGeoJSON | null>(
     demographicsGeoJSON,
+  );
+  const radiusRingDataRef = useRef<RadiusRingGeoJSON>(
+    radiusRingGeoJSON(selectedLocation, selectedRadiusFt),
   );
 
   useEffect(() => {
@@ -179,6 +214,13 @@ export default function PulseMap({
   useEffect(() => {
     demographicsDataRef.current = demographicsGeoJSON;
   }, [demographicsGeoJSON]);
+
+  useEffect(() => {
+    radiusRingDataRef.current = radiusRingGeoJSON(
+      selectedLocation,
+      selectedRadiusFt,
+    );
+  }, [selectedLocation, selectedRadiusFt]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
@@ -247,6 +289,30 @@ export default function PulseMap({
           "line-color": "#525252",
           "line-opacity": 0.5,
           "line-width": 0.8,
+        },
+      });
+      map.addSource(RADIUS_RING_SOURCE_ID, {
+        type: "geojson",
+        data: radiusRingDataRef.current,
+      });
+      map.addLayer({
+        id: RADIUS_RING_FILL_LAYER_ID,
+        type: "fill",
+        source: RADIUS_RING_SOURCE_ID,
+        paint: {
+          "fill-color": "#111827",
+          "fill-opacity": 0.08,
+        },
+      });
+      map.addLayer({
+        id: RADIUS_RING_LINE_LAYER_ID,
+        type: "line",
+        source: RADIUS_RING_SOURCE_ID,
+        paint: {
+          "line-color": "#111827",
+          "line-opacity": 0.75,
+          "line-width": 2,
+          "line-dasharray": [2, 1.5],
         },
       });
       map.addSource(NYU_SOURCE_ID, {
@@ -360,6 +426,30 @@ export default function PulseMap({
       map.off("load", applyDemographics);
     };
   }, [demographicsGeoJSON]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+
+    const applyRadiusRing = () => {
+      const source = map.getSource(RADIUS_RING_SOURCE_ID) as
+        | GeoJSONSource
+        | undefined;
+      source?.setData(radiusRingDataRef.current);
+    };
+
+    if (map.isStyleLoaded() && map.getSource(RADIUS_RING_SOURCE_ID)) {
+      applyRadiusRing();
+      return;
+    }
+
+    map.once("load", applyRadiusRing);
+    return () => {
+      map.off("load", applyRadiusRing);
+    };
+  }, [selectedLocation, selectedRadiusFt]);
 
   useEffect(() => {
     const map = mapRef.current;
