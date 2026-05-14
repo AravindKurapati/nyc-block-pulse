@@ -1,9 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  YAxis,
+} from "recharts";
 
 import { NYU_BUILDINGS } from "@/lib/nyu";
-import type { BlockReport, SignalName } from "@/lib/types";
+import type {
+  BlockReport,
+  SignalName,
+  SignalTrendPoint,
+  SignalTrends,
+} from "@/lib/types";
 
 type FlyToSpot = {
   name: string;
@@ -66,8 +78,10 @@ const SIGNAL_ORDER: SignalName[] = [
 type BlockPanelProps = {
   report: BlockReport | null;
   isLoading?: boolean;
+  isTrendLoading?: boolean;
   error?: string | null;
   selectedSignal?: SignalName;
+  trends?: SignalTrends;
   onFlyTo: (lat: number, lon: number) => void;
 };
 
@@ -80,6 +94,63 @@ function scoreColorClass(score: number) {
   if (score >= 30) return "text-red-500";
   if (score >= 10) return "text-amber-500";
   return "text-emerald-500";
+}
+
+function sparklineColor(score: number) {
+  if (score >= 30) return "#f87171";
+  if (score >= 10) return "#f59e0b";
+  return "#10b981";
+}
+
+function SignalSparkline({
+  data,
+  isLoading,
+  score,
+}: {
+  data?: SignalTrendPoint[];
+  isLoading?: boolean;
+  score: number;
+}) {
+  if (isLoading && !data?.length) {
+    return (
+      <div className="mt-3 h-14 overflow-hidden rounded bg-neutral-50">
+        <div className="h-full w-full animate-pulse bg-neutral-100" />
+      </div>
+    );
+  }
+
+  if (!data?.length) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 h-14 rounded border border-neutral-100 bg-neutral-50 px-1.5 py-1">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 4, right: 2, bottom: 0, left: 2 }}>
+          <YAxis hide domain={[0, "dataMax"]} />
+          <Tooltip
+            cursor={{ stroke: "#d4d4d4", strokeWidth: 1 }}
+            formatter={(value) => [`${value} events`, "Count"]}
+            labelFormatter={(value) => value}
+            contentStyle={{
+              border: "1px solid #e5e5e5",
+              borderRadius: 4,
+              boxShadow: "0 4px 16px rgb(0 0 0 / 0.08)",
+              fontSize: 12,
+            }}
+          />
+          <Line
+            type="monotone"
+            dataKey="count"
+            stroke={sparklineColor(score)}
+            strokeWidth={2}
+            dot={false}
+            isAnimationActive={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
 }
 
 function AnimatedScore({ target }: { target: number }) {
@@ -153,8 +224,10 @@ function SpotRow({
 export default function BlockPanel({
   report,
   isLoading = false,
+  isTrendLoading = false,
   error,
   selectedSignal,
+  trends,
   onFlyTo,
 }: BlockPanelProps) {
   const [saves, setSaves] = useState<SavedBlock[]>(() => loadSaves());
@@ -375,6 +448,12 @@ export default function BlockPanel({
                   style={{ width: `${barWidth}%` }}
                 />
               </div>
+
+              <SignalSparkline
+                data={trends?.[key]}
+                isLoading={isTrendLoading}
+                score={signal.score}
+              />
 
               <div className="mt-4">
                 <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">

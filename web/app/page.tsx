@@ -6,13 +6,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import BlockPanel from "@/components/BlockPanel";
 import SearchBar from "@/components/SearchBar";
 import SignalToggle from "@/components/SignalToggle";
-import { fetchBlock, fetchEvents } from "@/lib/api";
+import { fetchBlock, fetchEvents, fetchSignalTrend } from "@/lib/api";
 import type {
   BBox,
   BlockReport,
   EventsGeoJSON,
   SearchResult,
   SignalName,
+  SignalTrends,
 } from "@/lib/types";
 
 const Map = dynamic(() => import("@/components/Map"), { ssr: false });
@@ -20,6 +21,13 @@ const Map = dynamic(() => import("@/components/Map"), { ssr: false });
 const DEFAULT_SIGNAL: SignalName = "quality_of_life";
 const DEFAULT_DAYS = 90;
 const DEFAULT_RADIUS_FT = 500;
+const SIGNAL_ORDER: SignalName[] = [
+  "construction",
+  "nightlife",
+  "housing",
+  "restaurants",
+  "quality_of_life",
+];
 
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
@@ -31,11 +39,13 @@ export default function Home() {
     null,
   );
   const [report, setReport] = useState<BlockReport | null>(null);
+  const [signalTrends, setSignalTrends] = useState<SignalTrends>({});
   const [selectedLocation, setSelectedLocation] = useState<{
     lat: number;
     lon: number;
   } | null>(null);
   const [isBlockLoading, setIsBlockLoading] = useState(false);
+  const [isTrendLoading, setIsTrendLoading] = useState(false);
   const [blockError, setBlockError] = useState<string | null>(null);
   const [eventError, setEventError] = useState<string | null>(null);
   const panelError = blockError ?? eventError;
@@ -44,6 +54,7 @@ export default function Home() {
   const bboxRef = useRef<BBox | null>(null);
   const eventAbortRef = useRef<AbortController | null>(null);
   const blockAbortRef = useRef<AbortController | null>(null);
+  const trendAbortRef = useRef<AbortController | null>(null);
   const boundsDebounceRef = useRef<number | null>(null);
   const pendingSignalRef = useRef<SignalName | null>(null);
 
@@ -69,6 +80,48 @@ export default function Home() {
         setEventError(
           error instanceof Error ? error.message : "Could not load map events.",
         );
+      });
+  }, []);
+
+  const requestSignalTrends = useCallback((nextReport: BlockReport) => {
+    trendAbortRef.current?.abort();
+    const controller = new AbortController();
+    trendAbortRef.current = controller;
+    setSignalTrends({});
+    setIsTrendLoading(true);
+
+    Promise.all(
+      SIGNAL_ORDER.map(async (signalName) => {
+        const trend = await fetchSignalTrend(
+          {
+            signal: signalName,
+            lat: nextReport.location.lat,
+            lon: nextReport.location.lon,
+            days: nextReport.window_days,
+            radius_ft: nextReport.radius_ft,
+          },
+          controller.signal,
+        );
+        return [signalName, trend] as const;
+      }),
+    )
+      .then((entries) => {
+        setSignalTrends(Object.fromEntries(entries) as SignalTrends);
+      })
+      .catch((error: unknown) => {
+        if (isAbortError(error)) {
+          return;
+        }
+        setEventError(
+          error instanceof Error
+            ? error.message
+            : "Could not load signal trends.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsTrendLoading(false);
+        }
       });
   }, []);
 
@@ -105,17 +158,23 @@ export default function Home() {
 
   const loadBlock = useCallback((lat: number, lon: number) => {
     blockAbortRef.current?.abort();
+    trendAbortRef.current?.abort();
     const controller = new AbortController();
     blockAbortRef.current = controller;
     setSelectedLocation({ lat, lon });
+    setSignalTrends({});
     setBlockError(null);
     setIsBlockLoading(true);
+    setIsTrendLoading(false);
 
     fetchBlock(
       { lat, lon, days: DEFAULT_DAYS, radius_ft: DEFAULT_RADIUS_FT },
       controller.signal,
     )
-      .then((data) => setReport(data))
+      .then((data) => {
+        setReport(data);
+        requestSignalTrends(data);
+      })
       .catch((error: unknown) => {
         if (isAbortError(error)) {
           return;
@@ -131,7 +190,7 @@ export default function Home() {
           setIsBlockLoading(false);
         }
       });
-  }, []);
+  }, [requestSignalTrends]);
 
   const handleSearchSelect = useCallback(
     (result: SearchResult) => {
@@ -144,6 +203,7 @@ export default function Home() {
     return () => {
       eventAbortRef.current?.abort();
       blockAbortRef.current?.abort();
+      trendAbortRef.current?.abort();
       if (boundsDebounceRef.current) {
         window.clearTimeout(boundsDebounceRef.current);
       }
@@ -180,8 +240,10 @@ export default function Home() {
           <BlockPanel
             report={report}
             isLoading={isBlockLoading}
+            isTrendLoading={isTrendLoading}
             error={panelError}
             selectedSignal={signal}
+            trends={signalTrends}
             onFlyTo={loadBlock}
           />
         </div>
