@@ -4,24 +4,31 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import BlockPanel from "@/components/BlockPanel";
+import MapViewToggle, { type MapViewMode } from "@/components/MapViewToggle";
 import SearchBar from "@/components/SearchBar";
 import SignalToggle from "@/components/SignalToggle";
-import { fetchBlock, fetchEvents, fetchSignalTrend } from "@/lib/api";
+import {
+  fetchBlock,
+  fetchDemographics,
+  fetchEvents,
+  fetchSignalTrend,
+} from "@/lib/api";
 import type {
   BBox,
   BlockReport,
+  DemographicsGeoJSON,
+  EventSignalName,
   EventsGeoJSON,
   SearchResult,
-  SignalName,
   SignalTrends,
 } from "@/lib/types";
 
 const Map = dynamic(() => import("@/components/Map"), { ssr: false });
 
-const DEFAULT_SIGNAL: SignalName = "quality_of_life";
+const DEFAULT_SIGNAL: EventSignalName = "quality_of_life";
 const DEFAULT_DAYS = 90;
 const DEFAULT_RADIUS_FT = 500;
-const SIGNAL_ORDER: SignalName[] = [
+const SIGNAL_ORDER: EventSignalName[] = [
   "construction",
   "nightlife",
   "housing",
@@ -34,10 +41,13 @@ function isAbortError(error: unknown) {
 }
 
 export default function Home() {
-  const [signal, setSignal] = useState<SignalName>(DEFAULT_SIGNAL);
+  const [signal, setSignal] = useState<EventSignalName>(DEFAULT_SIGNAL);
+  const [mapViewMode, setMapViewMode] = useState<MapViewMode>("events");
   const [heatmapGeoJSON, setHeatmapGeoJSON] = useState<EventsGeoJSON | null>(
     null,
   );
+  const [demographicsGeoJSON, setDemographicsGeoJSON] =
+    useState<DemographicsGeoJSON | null>(null);
   const [report, setReport] = useState<BlockReport | null>(null);
   const [signalTrends, setSignalTrends] = useState<SignalTrends>({});
   const [selectedLocation, setSelectedLocation] = useState<{
@@ -51,18 +61,24 @@ export default function Home() {
   const panelError = blockError ?? eventError;
 
   const signalRef = useRef(signal);
+  const mapViewModeRef = useRef(mapViewMode);
   const bboxRef = useRef<BBox | null>(null);
   const eventAbortRef = useRef<AbortController | null>(null);
+  const demographicsAbortRef = useRef<AbortController | null>(null);
   const blockAbortRef = useRef<AbortController | null>(null);
   const trendAbortRef = useRef<AbortController | null>(null);
   const boundsDebounceRef = useRef<number | null>(null);
-  const pendingSignalRef = useRef<SignalName | null>(null);
+  const pendingSignalRef = useRef<EventSignalName | null>(null);
 
   useEffect(() => {
     signalRef.current = signal;
   }, [signal]);
 
-  const requestEvents = useCallback((nextSignal: SignalName, bbox: BBox) => {
+  useEffect(() => {
+    mapViewModeRef.current = mapViewMode;
+  }, [mapViewMode]);
+
+  const requestEvents = useCallback((nextSignal: EventSignalName, bbox: BBox) => {
     eventAbortRef.current?.abort();
     const controller = new AbortController();
     eventAbortRef.current = controller;
@@ -125,26 +141,50 @@ export default function Home() {
       });
   }, []);
 
+  const requestDemographics = useCallback((bbox: BBox) => {
+    demographicsAbortRef.current?.abort();
+    const controller = new AbortController();
+    demographicsAbortRef.current = controller;
+    setEventError(null);
+
+    fetchDemographics({ bbox, limit: 2000 }, controller.signal)
+      .then((data) => setDemographicsGeoJSON(data))
+      .catch((error: unknown) => {
+        if (isAbortError(error)) {
+          return;
+        }
+        setEventError(
+          error instanceof Error
+            ? error.message
+            : "Could not load demographics.",
+        );
+      });
+  }, []);
+
   const handleBoundsChange = useCallback(
     (bbox: BBox) => {
       bboxRef.current = bbox;
-      const pendingSignal = pendingSignalRef.current;
-      if (pendingSignal) {
-        pendingSignalRef.current = null;
-        requestEvents(pendingSignal, bbox);
-        return;
-      }
       if (boundsDebounceRef.current) {
         window.clearTimeout(boundsDebounceRef.current);
       }
       boundsDebounceRef.current = window.setTimeout(() => {
-        requestEvents(signalRef.current, bbox);
+        if (mapViewModeRef.current === "demographics") {
+          requestDemographics(bbox);
+          return;
+        }
+        const pendingSignal = pendingSignalRef.current;
+        pendingSignalRef.current = null;
+        requestEvents(pendingSignal ?? signalRef.current, bbox);
       }, 300);
     },
-    [requestEvents],
+    [requestDemographics, requestEvents],
   );
 
   useEffect(() => {
+    if (mapViewMode !== "events") {
+      pendingSignalRef.current = signal;
+      return;
+    }
     const bbox = bboxRef.current;
     if (bbox) {
       requestEvents(signal, bbox);
@@ -154,7 +194,19 @@ export default function Home() {
     document
       .getElementById(`signal-${signal}`)
       ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [requestEvents, signal]);
+  }, [mapViewMode, requestEvents, signal]);
+
+  useEffect(() => {
+    const bbox = bboxRef.current;
+    if (!bbox) {
+      return;
+    }
+    if (mapViewMode === "demographics") {
+      requestDemographics(bbox);
+      return;
+    }
+    requestEvents(signalRef.current, bbox);
+  }, [mapViewMode, requestDemographics, requestEvents]);
 
   const loadBlock = useCallback((lat: number, lon: number) => {
     blockAbortRef.current?.abort();
@@ -202,6 +254,7 @@ export default function Home() {
   useEffect(() => {
     return () => {
       eventAbortRef.current?.abort();
+      demographicsAbortRef.current?.abort();
       blockAbortRef.current?.abort();
       trendAbortRef.current?.abort();
       if (boundsDebounceRef.current) {
@@ -225,14 +278,21 @@ export default function Home() {
         <section className="relative min-h-[calc(100vh-4rem)] bg-neutral-200">
           <Map
             heatmapGeoJSON={heatmapGeoJSON}
+            demographicsGeoJSON={demographicsGeoJSON}
+            viewMode={mapViewMode}
             selectedLocation={selectedLocation}
             onMapClick={loadBlock}
             onBoundsChange={handleBoundsChange}
           />
-          <div className="pointer-events-none absolute bottom-4 left-4 z-10">
+          <div className="pointer-events-none absolute bottom-4 left-4 z-10 space-y-3">
             <div className="pointer-events-auto">
-              <SignalToggle signal={signal} onChange={setSignal} />
+              <MapViewToggle mode={mapViewMode} onChange={setMapViewMode} />
             </div>
+            {mapViewMode === "events" ? (
+              <div className="pointer-events-auto">
+                <SignalToggle signal={signal} onChange={setSignal} />
+              </div>
+            ) : null}
           </div>
         </section>
 

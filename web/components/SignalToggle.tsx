@@ -1,8 +1,8 @@
 "use client";
 
-import type { SignalName } from "@/lib/types";
+import type { EventSignalName } from "@/lib/types";
 
-const SIGNALS: Array<{ value: SignalName; label: string }> = [
+const SIGNALS: Array<{ value: EventSignalName; label: string }> = [
   { value: "quality_of_life", label: "Quality of life" },
   { value: "nightlife", label: "Nightlife" },
   { value: "construction", label: "Construction" },
@@ -11,8 +11,8 @@ const SIGNALS: Array<{ value: SignalName; label: string }> = [
 ];
 
 type SignalToggleProps = {
-  signal: SignalName;
-  onChange: (signal: SignalName) => void;
+  signal: EventSignalName;
+  onChange: (signal: EventSignalName) => void;
 };
 
 export default function SignalToggle({ signal, onChange }: SignalToggleProps) {
