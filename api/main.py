@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes.block import router as block_router
+from api.routes.demographics import router as demographics_router
 from api.routes.events import router as events_router
 from api.routes.search import router as search_router
 
@@ -41,6 +42,7 @@ app.add_middleware(
 
 app.include_router(events_router)
 app.include_router(block_router)
+app.include_router(demographics_router)
 app.include_router(search_router)
 
 

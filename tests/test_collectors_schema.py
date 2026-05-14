@@ -9,7 +9,7 @@ collector sends, and assert they match the current published schemas:
 """
 from __future__ import annotations
 
-from nyc_pulse.collectors import dob_permits, hpd_complaints, liquor
+from nyc_pulse.collectors import census_acs, dob_permits, hpd_complaints, liquor
 
 
 # Valid field names taken from data.cityofnewyork.us/api/views/rbx6-tga4.json
@@ -354,3 +354,113 @@ def test_evictions_normalizes_row(monkeypatch):
     assert e["address"] == "100 MAIN ST"
     assert e["lat"] == 40.85460
     assert e["lon"] == -73.89030
+
+
+def test_census_acs_normalizes_tract_metrics():
+    row = {
+        "NAME": "Census Tract 1; New York County; New York",
+        "state": "36",
+        "county": "061",
+        "tract": "000100",
+        "B19013_001E": "120000",
+        "B25003_001E": "100",
+        "B25003_003E": "82",
+        "B15003_001E": "200",
+        "B15003_022E": "90",
+        "B15003_023E": "30",
+        "B15003_024E": "10",
+        "B15003_025E": "6",
+        "B01001_001E": "1000",
+        "B01001_003E": "21",
+        "B01001_027E": "19",
+        "B01001_020E": "20",
+        "B01001_021E": "20",
+        "B01001_022E": "25",
+        "B01001_023E": "15",
+        "B01001_024E": "10",
+        "B01001_025E": "5",
+        "B01001_044E": "22",
+        "B01001_045E": "18",
+        "B01001_046E": "24",
+        "B01001_047E": "16",
+        "B01001_048E": "10",
+        "B01001_049E": "5",
+    }
+
+    result = census_acs.normalize_acs_row(row, 2024)
+
+    assert result["geoid"] == "36061000100"
+    assert result["borough"] == "Manhattan"
+    assert result["median_household_income"] == 120000
+    assert result["renter_occupied_pct"] == 82
+    assert result["bachelors_or_higher_pct"] == 68
+    assert result["under_5_pct"] == 4
+    assert result["over_65_pct"] == 19
+
+
+def test_census_acs_density_change_uses_largest_metric_change():
+    current = {
+        "median_household_income": 120000,
+        "renter_occupied_pct": 70,
+        "bachelors_or_higher_pct": 60,
+        "under_5_pct": 3,
+        "over_65_pct": 20,
+    }
+    previous = {
+        "median_household_income": 100000,
+        "renter_occupied_pct": 50,
+        "bachelors_or_higher_pct": 55,
+        "under_5_pct": 4,
+        "over_65_pct": 10,
+    }
+
+    assert census_acs.calculate_density_change(current, previous) == 100
+
+
+def test_census_acs_fetches_census_and_tigerweb(monkeypatch):
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    def fake_get(url, params, timeout):
+        calls.append({"url": url, "params": params, "timeout": timeout})
+        if "api.census.gov" in url:
+            headers = ["NAME", *census_acs.ACS_VARIABLES.values(), "state", "county", "tract"]
+            values = ["Census Tract 1; Bronx County; New York", *["1"] * len(census_acs.ACS_VARIABLES), "36", "005", "000100"]
+            return FakeResponse([headers, values])
+        return FakeResponse(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {"GEOID": "36005000100"},
+                        "geometry": {
+                            "type": "MultiPolygon",
+                            "coordinates": [
+                                [[[-73.9, 40.8], [-73.89, 40.8], [-73.89, 40.81], [-73.9, 40.8]]]
+                            ],
+                        },
+                    }
+                ],
+            }
+        )
+
+    monkeypatch.setattr(census_acs.httpx, "get", fake_get)
+
+    estimates = census_acs.fetch_acs_estimates(year=2024, counties=["005"])
+    geometries = census_acs.fetch_tract_geometries(year=2024, counties=["005"])
+
+    assert "36005000100" in estimates
+    assert geometries["36005000100"]["type"] == "MultiPolygon"
+    assert calls[0]["params"]["for"] == "tract:*"
+    assert calls[0]["params"]["in"] == "state:36 county:005"
+    assert "/7/query" in calls[1]["url"]
