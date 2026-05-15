@@ -281,6 +281,7 @@ export default function Home() {
             demographicsGeoJSON={demographicsGeoJSON}
             viewMode={mapViewMode}
             selectedLocation={selectedLocation}
+            selectedRadiusFt={report?.radius_ft ?? DEFAULT_RADIUS_FT}
             onMapClick={loadBlock}
             onBoundsChange={handleBoundsChange}
           />
