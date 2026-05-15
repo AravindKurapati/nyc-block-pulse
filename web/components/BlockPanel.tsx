@@ -65,6 +65,7 @@ const SIGNAL_LABELS: Record<SignalName, string> = {
   housing: "Housing",
   restaurants: "Restaurants",
   quality_of_life: "Quality of life",
+  density_change: "Density change",
 };
 
 const SIGNAL_ORDER: SignalName[] = [
@@ -73,6 +74,7 @@ const SIGNAL_ORDER: SignalName[] = [
   "housing",
   "restaurants",
   "quality_of_life",
+  "density_change",
 ];
 
 type BlockPanelProps = {
@@ -406,6 +408,7 @@ export default function BlockPanel({
           const signal = report.signals[key];
           const active = key === selectedSignal;
           const barWidth = Math.min(100, (signal.score / 50) * 100);
+          const trendData = key === "density_change" ? undefined : trends?.[key];
           return (
             <section
               key={key}
@@ -450,7 +453,7 @@ export default function BlockPanel({
               </div>
 
               <SignalSparkline
-                data={trends?.[key]}
+                data={trendData}
                 isLoading={isTrendLoading}
                 score={signal.score}
               />

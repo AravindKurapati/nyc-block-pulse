@@ -9,10 +9,14 @@ import maplibregl, {
 } from "maplibre-gl";
 
 import { NYU_BUILDINGS } from "@/lib/nyu";
-import type { BBox, EventsGeoJSON } from "@/lib/types";
+import type { BBox, DemographicsGeoJSON, EventsGeoJSON } from "@/lib/types";
+import type { MapViewMode } from "./MapViewToggle";
 
 const HEATMAP_SOURCE_ID = "signal-events";
 const HEATMAP_LAYER_ID = "signal-heatmap";
+const DEMOGRAPHICS_SOURCE_ID = "tract-demographics";
+const DEMOGRAPHICS_FILL_LAYER_ID = "tract-demographics-fill";
+const DEMOGRAPHICS_LINE_LAYER_ID = "tract-demographics-line";
 const NYU_SOURCE_ID = "nyu-buildings";
 const NYU_CIRCLE_LAYER_ID = "nyu-building-circles";
 const NYU_LABEL_LAYER_ID = "nyu-building-labels";
@@ -24,6 +28,8 @@ type SelectedLocation = {
 
 type PulseMapProps = {
   heatmapGeoJSON: EventsGeoJSON | null;
+  demographicsGeoJSON: DemographicsGeoJSON | null;
+  viewMode: MapViewMode;
   selectedLocation: SelectedLocation;
   onMapClick: (lat: number, lon: number) => void;
   onBoundsChange: (bbox: BBox) => void;
@@ -47,6 +53,13 @@ function emptyFeatureCollection(): EventsGeoJSON {
   };
 }
 
+function emptyDemographicsFeatureCollection(): DemographicsGeoJSON {
+  return {
+    type: "FeatureCollection",
+    features: [],
+  };
+}
+
 function nyuBuildingsGeoJSON() {
   return {
     type: "FeatureCollection" as const,
@@ -66,6 +79,8 @@ function nyuBuildingsGeoJSON() {
 
 export default function PulseMap({
   heatmapGeoJSON,
+  demographicsGeoJSON,
+  viewMode,
   selectedLocation,
   onMapClick,
   onBoundsChange,
@@ -76,6 +91,9 @@ export default function PulseMap({
   const clickHandlerRef = useRef(onMapClick);
   const boundsHandlerRef = useRef(onBoundsChange);
   const heatmapDataRef = useRef<EventsGeoJSON | null>(heatmapGeoJSON);
+  const demographicsDataRef = useRef<DemographicsGeoJSON | null>(
+    demographicsGeoJSON,
+  );
 
   useEffect(() => {
     clickHandlerRef.current = onMapClick;
@@ -88,6 +106,10 @@ export default function PulseMap({
   useEffect(() => {
     heatmapDataRef.current = heatmapGeoJSON;
   }, [heatmapGeoJSON]);
+
+  useEffect(() => {
+    demographicsDataRef.current = demographicsGeoJSON;
+  }, [demographicsGeoJSON]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
@@ -165,6 +187,53 @@ export default function PulseMap({
           ],
         },
       });
+      map.addSource(DEMOGRAPHICS_SOURCE_ID, {
+        type: "geojson",
+        data:
+          demographicsDataRef.current ?? emptyDemographicsFeatureCollection(),
+      });
+      map.addLayer({
+        id: DEMOGRAPHICS_FILL_LAYER_ID,
+        type: "fill",
+        source: DEMOGRAPHICS_SOURCE_ID,
+        layout: {
+          visibility: viewMode === "demographics" ? "visible" : "none",
+        },
+        paint: {
+          "fill-color": [
+            "interpolate",
+            ["linear"],
+            ["coalesce", ["get", "density_change"], 0],
+            0,
+            "#d1fae5",
+            10,
+            "#fef08a",
+            25,
+            "#fb923c",
+            50,
+            "#dc2626",
+          ],
+          "fill-opacity": 0.58,
+        },
+      });
+      map.addLayer({
+        id: DEMOGRAPHICS_LINE_LAYER_ID,
+        type: "line",
+        source: DEMOGRAPHICS_SOURCE_ID,
+        layout: {
+          visibility: viewMode === "demographics" ? "visible" : "none",
+        },
+        paint: {
+          "line-color": "#525252",
+          "line-opacity": 0.5,
+          "line-width": 0.8,
+        },
+      });
+      map.setLayoutProperty(
+        HEATMAP_LAYER_ID,
+        "visibility",
+        viewMode === "events" ? "visible" : "none",
+      );
       map.addSource(NYU_SOURCE_ID, {
         type: "geojson",
         data: nyuBuildingsGeoJSON(),
@@ -266,6 +335,71 @@ export default function PulseMap({
       map.off("load", applyHeatmap);
     };
   }, [heatmapGeoJSON]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+
+    const applyDemographics = () => {
+      const source = map.getSource(DEMOGRAPHICS_SOURCE_ID) as
+        | GeoJSONSource
+        | undefined;
+      source?.setData(
+        demographicsDataRef.current ?? emptyDemographicsFeatureCollection(),
+      );
+    };
+
+    if (map.isStyleLoaded() && map.getSource(DEMOGRAPHICS_SOURCE_ID)) {
+      applyDemographics();
+      return;
+    }
+
+    map.once("load", applyDemographics);
+    return () => {
+      map.off("load", applyDemographics);
+    };
+  }, [demographicsGeoJSON]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+
+    const applyVisibility = () => {
+      if (map.getLayer(HEATMAP_LAYER_ID)) {
+        map.setLayoutProperty(
+          HEATMAP_LAYER_ID,
+          "visibility",
+          viewMode === "events" ? "visible" : "none",
+        );
+      }
+      for (const layer of [
+        DEMOGRAPHICS_FILL_LAYER_ID,
+        DEMOGRAPHICS_LINE_LAYER_ID,
+      ]) {
+        if (map.getLayer(layer)) {
+          map.setLayoutProperty(
+            layer,
+            "visibility",
+            viewMode === "demographics" ? "visible" : "none",
+          );
+        }
+      }
+    };
+
+    if (map.isStyleLoaded()) {
+      applyVisibility();
+      return;
+    }
+
+    map.once("load", applyVisibility);
+    return () => {
+      map.off("load", applyVisibility);
+    };
+  }, [viewMode]);
 
   useEffect(() => {
     const map = mapRef.current;

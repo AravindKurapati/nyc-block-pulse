@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from api.deps import get_db_session
 from nyc_pulse.normalize.address import resolve_address
 from nyc_pulse.signals.construction import score_construction
+from nyc_pulse.signals.demographics import score_density_change
 from nyc_pulse.signals.housing import score_housing
 from nyc_pulse.signals.nightlife import score_nightlife
 from nyc_pulse.signals.quality_of_life import score_quality_of_life
@@ -62,6 +63,7 @@ def block_report(payload: BlockRequest, session: Session = Depends(get_db_sessio
         "housing": score_housing(lat, lon, payload.radius_ft, payload.days, session=session),
         "restaurants": score_restaurants(lat, lon, payload.radius_ft, payload.days, session=session),
         "quality_of_life": score_quality_of_life(lat, lon, payload.radius_ft, payload.days, session=session),
+        "density_change": score_density_change(lat, lon, payload.radius_ft, payload.days, session=session),
     }
 
     return {

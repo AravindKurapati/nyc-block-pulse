@@ -98,3 +98,66 @@ def upsert_events(session: Session, events: list[dict[str, Any]]) -> int:
         session.commit()
     return inserted
 
+
+def upsert_demographics(session: Session, rows: list[dict[str, Any]]) -> int:
+    """Insert or update Census tract demographics keyed by GEOID."""
+    if not rows:
+        return 0
+
+    statement = text(
+        """
+        INSERT INTO block_demographics (
+            geoid, tract_name, borough, state, county, tract, year,
+            median_household_income, renter_occupied_pct,
+            bachelors_or_higher_pct, under_5_pct, over_65_pct,
+            density_change, raw_json, geom, centroid, updated_at
+        )
+        VALUES (
+            :geoid, :tract_name, :borough, :state, :county, :tract, :year,
+            :median_household_income, :renter_occupied_pct,
+            :bachelors_or_higher_pct, :under_5_pct, :over_65_pct,
+            :density_change, CAST(:raw_json AS JSONB),
+            CASE
+                WHEN :geometry IS NOT NULL THEN
+                    ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON(:geometry), 4326))
+                ELSE NULL
+            END,
+            CASE
+                WHEN :geometry IS NOT NULL THEN
+                    ST_PointOnSurface(ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON(:geometry), 4326)))
+                ELSE NULL
+            END,
+            now()
+        )
+        ON CONFLICT (geoid) DO UPDATE SET
+            tract_name = EXCLUDED.tract_name,
+            borough = EXCLUDED.borough,
+            state = EXCLUDED.state,
+            county = EXCLUDED.county,
+            tract = EXCLUDED.tract,
+            year = EXCLUDED.year,
+            median_household_income = EXCLUDED.median_household_income,
+            renter_occupied_pct = EXCLUDED.renter_occupied_pct,
+            bachelors_or_higher_pct = EXCLUDED.bachelors_or_higher_pct,
+            under_5_pct = EXCLUDED.under_5_pct,
+            over_65_pct = EXCLUDED.over_65_pct,
+            density_change = EXCLUDED.density_change,
+            raw_json = EXCLUDED.raw_json,
+            geom = EXCLUDED.geom,
+            centroid = EXCLUDED.centroid,
+            updated_at = now()
+        """
+    )
+
+    params_list = [
+        {
+            **row,
+            "raw_json": json.dumps(row.get("raw_json") or {}),
+            "geometry": json.dumps(row.get("geometry")) if row.get("geometry") else None,
+        }
+        for row in rows
+    ]
+    result = session.execute(statement, params_list)
+    session.commit()
+    return result.rowcount or 0
+

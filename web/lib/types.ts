@@ -1,9 +1,11 @@
-export type SignalName =
+export type EventSignalName =
   | "construction"
   | "nightlife"
   | "housing"
   | "restaurants"
   | "quality_of_life";
+
+export type SignalName = EventSignalName | "density_change";
 
 export type EventFeature = {
   type: "Feature";
@@ -52,7 +54,7 @@ export type SignalTrendPoint = {
   count: number;
 };
 
-export type SignalTrends = Partial<Record<SignalName, SignalTrendPoint[]>>;
+export type SignalTrends = Partial<Record<EventSignalName, SignalTrendPoint[]>>;
 
 export type BlockReport = {
   location: {
@@ -72,6 +74,43 @@ export type BBox = {
   minLat: number;
   maxLon: number;
   maxLat: number;
+};
+
+type GeoJSONPosition = [number, number] | [number, number, number];
+type DemographicsProperties = {
+  geoid: string;
+  tract_name: string | null;
+  borough: string | null;
+  year: number | null;
+  median_household_income: number | null;
+  renter_occupied_pct: number | null;
+  bachelors_or_higher_pct: number | null;
+  under_5_pct: number | null;
+  over_65_pct: number | null;
+  density_change: number | null;
+};
+
+export type DemographicsFeature =
+  | {
+      type: "Feature";
+      geometry: {
+        type: "Polygon";
+        coordinates: GeoJSONPosition[][];
+      };
+      properties: DemographicsProperties;
+    }
+  | {
+      type: "Feature";
+      geometry: {
+        type: "MultiPolygon";
+        coordinates: GeoJSONPosition[][][];
+      };
+      properties: DemographicsProperties;
+    };
+
+export type DemographicsGeoJSON = {
+  type: "FeatureCollection";
+  features: DemographicsFeature[];
 };
 
 export type BlockRequest =

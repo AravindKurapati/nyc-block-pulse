@@ -42,6 +42,7 @@ def test_block_scores_all_signals_with_one_session(monkeypatch):
         "score_housing",
         "score_restaurants",
         "score_quality_of_life",
+        "score_density_change",
     ):
         monkeypatch.setattr(block_route, name, fake_score)
 
@@ -55,8 +56,15 @@ def test_block_scores_all_signals_with_one_session(monkeypatch):
     body = response.json()
     assert body["location"]["lat"] == 40.71978
     assert body["window_days"] == 90
-    assert set(body["signals"]) == {"construction", "nightlife", "housing", "restaurants", "quality_of_life"}
-    assert seen_sessions == [fake_session] * 5
+    assert set(body["signals"]) == {
+        "construction",
+        "nightlife",
+        "housing",
+        "restaurants",
+        "quality_of_life",
+        "density_change",
+    }
+    assert seen_sessions == [fake_session] * 6
     assert fake_session.closed is True
 
 
@@ -178,6 +186,63 @@ def test_signal_trend_returns_daily_counts():
         {"date": "2026-05-13", "count": 2},
         {"date": "2026-05-14", "count": 1},
     ]
+
+
+class FakeDemographicsSession(FakeSession):
+    def execute(self, statement, params):
+        sql = str(statement)
+        assert "block_demographics" in sql
+        assert "ST_MakeEnvelope" in sql
+        assert params["min_lon"] == -74.1
+        assert params["limit"] == 10
+        return FakeResult(
+            rows=[
+                FakeRow(
+                    geoid="36061000100",
+                    tract_name="Census Tract 1; New York County; New York",
+                    borough="Manhattan",
+                    year=2024,
+                    median_household_income=120000,
+                    renter_occupied_pct=82.4,
+                    bachelors_or_higher_pct=78.1,
+                    under_5_pct=3.2,
+                    over_65_pct=14.8,
+                    density_change=11.5,
+                    geometry={
+                        "type": "MultiPolygon",
+                        "coordinates": [
+                            [[[-74.0, 40.7], [-73.99, 40.7], [-73.99, 40.71], [-74.0, 40.7]]]
+                        ],
+                    },
+                )
+            ]
+        )
+
+
+def test_demographics_returns_tract_feature_collection():
+    fake_session = FakeDemographicsSession()
+
+    def override_session():
+        try:
+            yield fake_session
+        finally:
+            fake_session.close()
+
+    app.dependency_overrides[get_db_session] = override_session
+    try:
+        response = TestClient(app).get(
+            "/api/demographics",
+            params={"bbox": "-74.1,40.5,-73.7,40.9", "limit": 10},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["type"] == "FeatureCollection"
+    assert body["features"][0]["geometry"]["type"] == "MultiPolygon"
+    assert body["features"][0]["properties"]["geoid"] == "36061000100"
+    assert body["features"][0]["properties"]["density_change"] == 11.5
 
 
 class FakeHttpResponse:

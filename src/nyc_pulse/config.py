@@ -11,9 +11,9 @@ class Settings(BaseSettings):
     nyc_open_data_app_token: str = ""
     nyc_geoclient_app_id: str = ""
     nyc_geoclient_app_key: str = ""
+    census_api_key: str = ""
     default_radius_ft: int = 500
     default_window_days: int = 90
 
 
 settings = Settings()
-

@@ -2,9 +2,10 @@ import type {
   BBox,
   BlockReport,
   BlockRequest,
+  DemographicsGeoJSON,
+  EventSignalName,
   EventsGeoJSON,
   SearchResult,
-  SignalName,
   SignalTrendPoint,
 } from "./types";
 
@@ -35,7 +36,7 @@ export function bboxToParam(bbox: BBox): string {
 
 export async function fetchEvents(
   params: {
-    signal: SignalName;
+    signal: EventSignalName;
     bbox: BBox;
     days?: number;
     limit?: number;
@@ -70,7 +71,7 @@ export async function fetchBlock(
 
 export async function fetchSignalTrend(
   params: {
-    signal: SignalName;
+    signal: EventSignalName;
     lat: number;
     lon: number;
     radius_ft?: number;
@@ -91,6 +92,24 @@ export async function fetchSignalTrend(
     { signal },
   );
   return parseJson<SignalTrendPoint[]>(response);
+}
+
+export async function fetchDemographics(
+  params: {
+    bbox: BBox;
+    limit?: number;
+  },
+  signal?: AbortSignal,
+): Promise<DemographicsGeoJSON> {
+  const searchParams = new URLSearchParams({
+    bbox: bboxToParam(params.bbox),
+    limit: String(params.limit ?? 2000),
+  });
+
+  const response = await fetch(`${API_BASE_URL}/api/demographics?${searchParams}`, {
+    signal,
+  });
+  return parseJson<DemographicsGeoJSON>(response);
 }
 
 export async function searchAddresses(

@@ -7,13 +7,14 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from .collectors.dob_permits import collect_dob_permits
+from .collectors.census_acs import DEFAULT_ACS_YEAR, collect_block_demographics
 from .collectors.hpd_complaints import collect_hpd_complaints
 from .collectors.hpd_violations import collect_hpd_violations
 from .collectors.liquor import collect_liquor
 from .collectors.nyc_311 import collect_311
 from .collectors.restaurants import collect_restaurants
 from .config import settings
-from .db import get_session, upsert_events
+from .db import get_session, upsert_demographics, upsert_events
 
 app = typer.Typer()
 agent_app = typer.Typer(help="Autonomous dataset discovery and monitoring.")
@@ -66,6 +67,25 @@ def update(
         session.close()
 
 
+@app.command("update-demographics")
+def update_demographics(
+    year: int = typer.Option(DEFAULT_ACS_YEAR, help="ACS 5-year estimate year"),
+    comparison_year: int | None = typer.Option(None, help="Prior ACS year for density_change"),
+) -> None:
+    """Pull Census ACS tract demographics and TIGERweb tract polygons."""
+    session = get_session()
+    try:
+        with console.status(f"Fetching ACS {year} demographics..."):
+            rows = collect_block_demographics(year=year, comparison_year=comparison_year)
+        inserted = upsert_demographics(session, rows)
+        console.print(f"[cyan]demographics:[/cyan] {len(rows)} fetched, {inserted} upserted")
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
 @app.command("block")
 def block_report(
     query: str = typer.Argument(..., help="Address or intersection, e.g. 'Ludlow St & Rivington St'"),
@@ -76,6 +96,7 @@ def block_report(
     from .normalize.address import resolve_address
     from .reports.block_report import render_report
     from .signals.construction import score_construction
+    from .signals.demographics import score_density_change
     from .signals.housing import score_housing
     from .signals.nightlife import score_nightlife
     from .signals.quality_of_life import score_quality_of_life
@@ -101,6 +122,7 @@ def block_report(
                 "housing": score_housing(loc["lat"], loc["lon"], radius, days, session=session),
                 "restaurants": score_restaurants(loc["lat"], loc["lon"], radius, days, session=session),
                 "quality_of_life": score_quality_of_life(loc["lat"], loc["lon"], radius, days, session=session),
+                "density_change": score_density_change(loc["lat"], loc["lon"], radius, days, session=session),
             }
     finally:
         session.close()
