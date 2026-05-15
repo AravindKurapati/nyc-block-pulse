@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { NYU_BUILDINGS } from "@/lib/nyu";
 import type { BlockReport, SignalName } from "@/lib/types";
 
 type FlyToSpot = {
@@ -29,17 +30,6 @@ const ARU_PICKS: FlyToSpot[] = [
   { name: "The High Line", subtitle: "Chelsea", lat: 40.74800, lon: -74.00480 },
   { name: "Katz's Delicatessen", subtitle: "Lower East Side", lat: 40.72228, lon: -73.98737 },
   { name: "Astoria Park", subtitle: "Queens", lat: 40.77800, lon: -73.93040 },
-];
-
-const NYU_BUILDINGS: FlyToSpot[] = [
-  { name: "Bobst Library", subtitle: "Washington Sq S", lat: 40.72950, lon: -73.99800 },
-  { name: "Stern School of Business", subtitle: "44 W 4th St", lat: 40.72939, lon: -73.99695 },
-  { name: "Kimmel Center", subtitle: "60 Washington Sq S", lat: 40.72972, lon: -73.99842 },
-  { name: "Silver Center", subtitle: "100 Washington Sq E", lat: 40.72997, lon: -73.99682 },
-  { name: "Courant Institute", subtitle: "251 Mercer St", lat: 40.72874, lon: -73.99560 },
-  { name: "Tandon (Brooklyn)", subtitle: "6 MetroTech Center", lat: 40.69440, lon: -73.98650 },
-  { name: "NYU Langone Health", subtitle: "550 1st Ave", lat: 40.74220, lon: -73.97440 },
-  { name: "Casa Italiana", subtitle: "24 W 12th St", lat: 40.73560, lon: -73.99650 },
 ];
 
 const SAVES_KEY = "nbp_saves";
