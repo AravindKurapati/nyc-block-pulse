@@ -9,10 +9,6 @@ import type {
   SignalTrendPoint,
 } from "./types";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
-  "http://localhost:8000";
-
 async function parseJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let message = `Request failed with ${response.status}`;
@@ -50,7 +46,7 @@ export async function fetchEvents(
     limit: String(params.limit ?? 5000),
   });
 
-  const response = await fetch(`${API_BASE_URL}/api/events?${searchParams}`, {
+  const response = await fetch(`/api/events?${searchParams}`, {
     signal,
   });
   return parseJson<EventsGeoJSON>(response);
@@ -60,7 +56,7 @@ export async function fetchBlock(
   body: BlockRequest,
   signal?: AbortSignal,
 ): Promise<BlockReport> {
-  const response = await fetch(`${API_BASE_URL}/api/block`, {
+  const response = await fetch("/api/block", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -88,7 +84,7 @@ export async function fetchSignalTrend(
   });
 
   const response = await fetch(
-    `${API_BASE_URL}/api/signal-trend?${searchParams}`,
+    `/api/signal-trend?${searchParams}`,
     { signal },
   );
   return parseJson<SignalTrendPoint[]>(response);
@@ -106,7 +102,7 @@ export async function fetchDemographics(
     limit: String(params.limit ?? 2000),
   });
 
-  const response = await fetch(`${API_BASE_URL}/api/demographics?${searchParams}`, {
+  const response = await fetch(`/api/demographics?${searchParams}`, {
     signal,
   });
   return parseJson<DemographicsGeoJSON>(response);
@@ -117,7 +113,7 @@ export async function searchAddresses(
   signal?: AbortSignal,
 ): Promise<SearchResult[]> {
   const searchParams = new URLSearchParams({ q: query });
-  const response = await fetch(`${API_BASE_URL}/api/search?${searchParams}`, {
+  const response = await fetch(`/api/search?${searchParams}`, {
     signal,
   });
   return parseJson<SearchResult[]>(response);
