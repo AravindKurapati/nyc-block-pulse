@@ -47,6 +47,13 @@ export type SignalReport = {
   evidence: SignalEvidence[];
 };
 
+export type SignalTrendPoint = {
+  date: string;
+  count: number;
+};
+
+export type SignalTrends = Partial<Record<SignalName, SignalTrendPoint[]>>;
+
 export type BlockReport = {
   location: {
     lat: number;

@@ -131,6 +131,55 @@ def test_events_returns_sampled_feature_collection():
     assert body["features"][0]["properties"]["id"] == "311_1"
 
 
+class FakeTrendSession(FakeSession):
+    def execute(self, statement, params):
+        sql = str(statement)
+        assert "generate_series" in sql
+        assert "ST_DWithin" in sql
+        assert params["sources"] == ("dob_permits",)
+        assert params["days"] == 3
+        assert round(params["radius_m"], 2) == 152.4
+        return FakeResult(
+            rows=[
+                FakeRow(date="2026-05-12", count=0),
+                FakeRow(date="2026-05-13", count=2),
+                FakeRow(date="2026-05-14", count=1),
+            ]
+        )
+
+
+def test_signal_trend_returns_daily_counts():
+    fake_session = FakeTrendSession()
+
+    def override_session():
+        try:
+            yield fake_session
+        finally:
+            fake_session.close()
+
+    app.dependency_overrides[get_db_session] = override_session
+    try:
+        response = TestClient(app).get(
+            "/api/signal-trend",
+            params={
+                "signal": "construction",
+                "lat": 40.7295,
+                "lon": -73.998,
+                "radius_ft": 500,
+                "days": 3,
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {"date": "2026-05-12", "count": 0},
+        {"date": "2026-05-13", "count": 2},
+        {"date": "2026-05-14", "count": 1},
+    ]
+
+
 class FakeHttpResponse:
     def __init__(self, payload, status_code=200):
         self._payload = payload

@@ -5,6 +5,7 @@ import type {
   EventsGeoJSON,
   SearchResult,
   SignalName,
+  SignalTrendPoint,
 } from "./types";
 
 const API_BASE_URL =
@@ -65,6 +66,31 @@ export async function fetchBlock(
     signal,
   });
   return parseJson<BlockReport>(response);
+}
+
+export async function fetchSignalTrend(
+  params: {
+    signal: SignalName;
+    lat: number;
+    lon: number;
+    radius_ft?: number;
+    days?: number;
+  },
+  signal?: AbortSignal,
+): Promise<SignalTrendPoint[]> {
+  const searchParams = new URLSearchParams({
+    signal: params.signal,
+    lat: String(params.lat),
+    lon: String(params.lon),
+    radius_ft: String(params.radius_ft ?? 500),
+    days: String(params.days ?? 90),
+  });
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/signal-trend?${searchParams}`,
+    { signal },
+  );
+  return parseJson<SignalTrendPoint[]>(response);
 }
 
 export async function searchAddresses(
