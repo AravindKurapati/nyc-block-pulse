@@ -118,10 +118,10 @@ function eventHexagons(data: EventsGeoJSON | null): EventHex[] {
 }
 
 function hexFillColor(count: number): [number, number, number, number] {
-  if (count >= 25) return [220, 38, 38, 170];
-  if (count >= 10) return [249, 115, 22, 155];
-  if (count >= 4) return [250, 204, 21, 140];
-  return [20, 184, 166, 125];
+  if (count >= 25) return [220, 38, 38, 110];
+  if (count >= 10) return [249, 115, 22, 95];
+  if (count >= 4) return [250, 204, 21, 80];
+  return [20, 184, 166, 70];
 }
 
 function deckEventLayers(data: EventsGeoJSON | null, viewMode: MapViewMode) {
@@ -141,7 +141,7 @@ function deckEventLayers(data: EventsGeoJSON | null, viewMode: MapViewMode) {
       radiusPixels: 48,
       intensity: 1.1,
       threshold: 0.04,
-      opacity: 0.5,
+      opacity: 0.35,
     }),
     new H3HexagonLayer<EventHex>({
       id: DECK_H3_LAYER_ID,
@@ -242,7 +242,7 @@ export default function PulseMap({
     );
     map.addControl(new maplibregl.AttributionControl({ compact: true }));
     const deckOverlay = new MapboxOverlay({
-      interleaved: false,
+      interleaved: true,
       layers: deckEventLayers(heatmapDataRef.current, viewMode),
     });
     deckOverlayRef.current = deckOverlay;

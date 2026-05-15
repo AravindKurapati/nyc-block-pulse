@@ -2,9 +2,17 @@
 
 export type MapViewMode = "events" | "demographics";
 
-const MODES: Array<{ value: MapViewMode; label: string }> = [
-  { value: "events", label: "Events" },
-  { value: "demographics", label: "Demographics" },
+const MODES: Array<{ value: MapViewMode; label: string; tooltip: string }> = [
+  {
+    value: "events",
+    label: "Activity",
+    tooltip: "Recent events near each block — permits, complaints, crime, fires.",
+  },
+  {
+    value: "demographics",
+    label: "Population",
+    tooltip: "Census demographics — density and 5-year change by tract.",
+  },
 ];
 
 type MapViewToggleProps = {
@@ -26,6 +34,7 @@ export default function MapViewToggle({ mode, onChange }: MapViewToggleProps) {
               key={item.value}
               type="button"
               onClick={() => onChange(item.value)}
+              title={item.tooltip}
               className={[
                 "min-h-9 rounded border px-3 text-sm font-medium transition",
                 active

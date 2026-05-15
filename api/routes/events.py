@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,6 +11,9 @@ from api.deps import get_db_session
 from nyc_pulse.normalize.geography import feet_to_meters
 
 router = APIRouter(prefix="/api", tags=["events"])
+
+_EVENTS_CACHE_TTL_SECONDS = 600
+_events_cache: dict[tuple[str, str, int, int], tuple[float, dict[str, Any]]] = {}
 
 SignalName = Literal["construction", "nightlife", "housing", "restaurants", "quality_of_life"]
 
@@ -215,14 +219,24 @@ def events(
     session: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     parsed_bbox = _parse_bbox(bbox)
+    cache_key = (signal, bbox, days, limit)
+
+    cached = _events_cache.get(cache_key)
+    if cached is not None:
+        stored_at, payload = cached
+        if time.monotonic() - stored_at < _EVENTS_CACHE_TTL_SECONDS:
+            return payload
+
     params = _base_params(signal, parsed_bbox, days, limit)
     total_match = _count_events(session, params)
     sampled = total_match > limit
     rows = _fetch_events(session, params, sampled)
 
-    return {
+    payload = {
         "type": "FeatureCollection",
         "features": [_feature(row) for row in rows],
         "sampled": sampled,
         "total_match": total_match,
     }
+    _events_cache[cache_key] = (time.monotonic(), payload)
+    return payload

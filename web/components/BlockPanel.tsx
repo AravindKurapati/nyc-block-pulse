@@ -39,9 +39,6 @@ const ARU_PICKS: FlyToSpot[] = [
   { name: "Bensonhurst Park", subtitle: "Brooklyn", lat: 40.60526, lon: -74.00910 },
   { name: "Domino Park", subtitle: "Williamsburg", lat: 40.71503, lon: -73.96590 },
   { name: "Hunters Point", subtitle: "LIC, Queens", lat: 40.74480, lon: -73.94860 },
-  { name: "The High Line", subtitle: "Chelsea", lat: 40.74800, lon: -74.00480 },
-  { name: "Katz's Delicatessen", subtitle: "Lower East Side", lat: 40.72228, lon: -73.98737 },
-  { name: "Astoria Park", subtitle: "Queens", lat: 40.77800, lon: -73.93040 },
 ];
 
 const SAVES_KEY = "nbp_saves";
@@ -271,34 +268,67 @@ export default function BlockPanel({
           {error ? <p className="mt-3 text-red-700">{error}</p> : null}
         </div>
 
-        <div className="border-t border-neutral-100 px-5 py-4">
-          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
-            ★ Aru&apos;s Picks
-          </div>
-          <ul className="space-y-3">
+        <details className="group border-t border-neutral-100 px-5 py-4">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold uppercase tracking-wide text-neutral-500 hover:text-neutral-900">
+            <span>★ Aru&apos;s Picks</span>
+            <svg
+              viewBox="0 0 24 24"
+              className="h-4 w-4 transition-transform group-open:rotate-90"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </summary>
+          <ul className="mt-3 space-y-3">
             {ARU_PICKS.map((spot) => (
               <SpotRow key={spot.name} spot={spot} onFlyTo={onFlyTo} />
             ))}
           </ul>
-        </div>
+        </details>
 
-        <div className="border-t border-neutral-100 px-5 py-4">
-          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-purple-500">
-            ◆ NYU Buildings
-          </div>
-          <ul className="space-y-3">
+        <details className="group border-t border-neutral-100 px-5 py-4">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold uppercase tracking-wide text-purple-500 hover:text-purple-700">
+            <span>◆ NYU Buildings</span>
+            <svg
+              viewBox="0 0 24 24"
+              className="h-4 w-4 transition-transform group-open:rotate-90"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </summary>
+          <ul className="mt-3 space-y-3">
             {NYU_BUILDINGS.map((spot) => (
               <SpotRow key={spot.name} spot={spot} onFlyTo={onFlyTo} accent="purple" />
             ))}
           </ul>
-        </div>
+        </details>
 
         {saves.length > 0 && (
-          <div className="border-t border-neutral-100 px-5 py-4">
-            <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
-              ♥ Your Saves
-            </div>
-            <ul className="space-y-3">
+          <details open className="group border-t border-neutral-100 px-5 py-4">
+            <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold uppercase tracking-wide text-neutral-500 hover:text-neutral-900">
+              <span>♥ Your Saves</span>
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4 transition-transform group-open:rotate-90"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </summary>
+            <ul className="mt-3 space-y-3">
               {saves.map((s) => (
                 <li key={`${s.lat},${s.lon}`} className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
@@ -351,7 +381,7 @@ export default function BlockPanel({
                 </li>
               ))}
             </ul>
-          </div>
+          </details>
         )}
       </aside>
     );
