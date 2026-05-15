@@ -1,8 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { HeatmapLayer } from "@deck.gl/aggregation-layers";
+import { H3HexagonLayer } from "@deck.gl/geo-layers";
+import { MapboxOverlay } from "@deck.gl/mapbox";
+import { latLngToCell } from "h3-js";
 import maplibregl, {
   type GeoJSONSource,
+  type IControl,
   type LngLatBounds,
   type Map as MapLibreMap,
   type Marker,
@@ -12,8 +17,9 @@ import { NYU_BUILDINGS } from "@/lib/nyu";
 import type { BBox, DemographicsGeoJSON, EventsGeoJSON } from "@/lib/types";
 import type { MapViewMode } from "./MapViewToggle";
 
-const HEATMAP_SOURCE_ID = "signal-events";
-const HEATMAP_LAYER_ID = "signal-heatmap";
+const DECK_HEATMAP_LAYER_ID = "deck-signal-heatmap";
+const DECK_H3_LAYER_ID = "deck-signal-h3";
+const H3_RESOLUTION = 9;
 const DEMOGRAPHICS_SOURCE_ID = "tract-demographics";
 const DEMOGRAPHICS_FILL_LAYER_ID = "tract-demographics-fill";
 const DEMOGRAPHICS_LINE_LAYER_ID = "tract-demographics-line";
@@ -35,6 +41,16 @@ type PulseMapProps = {
   onBoundsChange: (bbox: BBox) => void;
 };
 
+type EventPoint = {
+  position: [number, number];
+  weight: number;
+};
+
+type EventHex = {
+  hex: string;
+  count: number;
+};
+
 function boundsToBBox(bounds: LngLatBounds): BBox {
   return {
     minLon: bounds.getWest(),
@@ -44,20 +60,72 @@ function boundsToBBox(bounds: LngLatBounds): BBox {
   };
 }
 
-function emptyFeatureCollection(): EventsGeoJSON {
-  return {
-    type: "FeatureCollection",
-    features: [],
-    sampled: false,
-    total_match: 0,
-  };
-}
-
 function emptyDemographicsFeatureCollection(): DemographicsGeoJSON {
   return {
     type: "FeatureCollection",
     features: [],
   };
+}
+
+function eventPoints(data: EventsGeoJSON | null): EventPoint[] {
+  return (
+    data?.features.map((feature) => ({
+      position: feature.geometry.coordinates,
+      weight: 1,
+    })) ?? []
+  );
+}
+
+function eventHexagons(data: EventsGeoJSON | null): EventHex[] {
+  const counts = new Map<string, number>();
+  for (const feature of data?.features ?? []) {
+    const [lon, lat] = feature.geometry.coordinates;
+    const hex = latLngToCell(lat, lon, H3_RESOLUTION);
+    counts.set(hex, (counts.get(hex) ?? 0) + 1);
+  }
+  return Array.from(counts, ([hex, count]) => ({ hex, count }));
+}
+
+function hexFillColor(count: number): [number, number, number, number] {
+  if (count >= 25) return [220, 38, 38, 170];
+  if (count >= 10) return [249, 115, 22, 155];
+  if (count >= 4) return [250, 204, 21, 140];
+  return [20, 184, 166, 125];
+}
+
+function deckEventLayers(data: EventsGeoJSON | null, viewMode: MapViewMode) {
+  if (viewMode !== "events") {
+    return [];
+  }
+
+  const points = eventPoints(data);
+  const hexagons = eventHexagons(data);
+
+  return [
+    new HeatmapLayer<EventPoint>({
+      id: DECK_HEATMAP_LAYER_ID,
+      data: points,
+      getPosition: (item) => item.position,
+      getWeight: (item) => item.weight,
+      radiusPixels: 48,
+      intensity: 1.1,
+      threshold: 0.04,
+      opacity: 0.5,
+    }),
+    new H3HexagonLayer<EventHex>({
+      id: DECK_H3_LAYER_ID,
+      data: hexagons,
+      getHexagon: (item) => item.hex,
+      getFillColor: (item) => hexFillColor(item.count),
+      getLineColor: [38, 38, 38, 90],
+      getLineWidth: 1,
+      lineWidthMinPixels: 0.75,
+      stroked: true,
+      filled: true,
+      extruded: false,
+      pickable: false,
+    }),
+  ];
 }
 
 function nyuBuildingsGeoJSON() {
@@ -88,6 +156,7 @@ export default function PulseMap({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRef = useRef<Marker | null>(null);
+  const deckOverlayRef = useRef<MapboxOverlay | null>(null);
   const clickHandlerRef = useRef(onMapClick);
   const boundsHandlerRef = useRef(onBoundsChange);
   const heatmapDataRef = useRef<EventsGeoJSON | null>(heatmapGeoJSON);
@@ -130,63 +199,14 @@ export default function PulseMap({
       "top-left",
     );
     map.addControl(new maplibregl.AttributionControl({ compact: true }));
+    const deckOverlay = new MapboxOverlay({
+      interleaved: false,
+      layers: deckEventLayers(heatmapDataRef.current, viewMode),
+    });
+    deckOverlayRef.current = deckOverlay;
+    map.addControl(deckOverlay as unknown as IControl);
 
     map.on("load", () => {
-      map.addSource(HEATMAP_SOURCE_ID, {
-        type: "geojson",
-        data: heatmapDataRef.current ?? emptyFeatureCollection(),
-      });
-      map.addLayer({
-        id: HEATMAP_LAYER_ID,
-        type: "heatmap",
-        source: HEATMAP_SOURCE_ID,
-        maxzoom: 16,
-        paint: {
-          "heatmap-weight": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            10,
-            0.6,
-            16,
-            1,
-          ],
-          "heatmap-intensity": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            9,
-            0.9,
-            15,
-            1.8,
-          ],
-          "heatmap-radius": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            9,
-            12,
-            15,
-            28,
-          ],
-          "heatmap-opacity": 0.72,
-          "heatmap-color": [
-            "interpolate",
-            ["linear"],
-            ["heatmap-density"],
-            0,
-            "rgba(255,255,255,0)",
-            0.2,
-            "#4cc9f0",
-            0.45,
-            "#4895ef",
-            0.7,
-            "#f9c74f",
-            1,
-            "#d00000",
-          ],
-        },
-      });
       map.addSource(DEMOGRAPHICS_SOURCE_ID, {
         type: "geojson",
         data:
@@ -229,11 +249,6 @@ export default function PulseMap({
           "line-width": 0.8,
         },
       });
-      map.setLayoutProperty(
-        HEATMAP_LAYER_ID,
-        "visibility",
-        viewMode === "events" ? "visible" : "none",
-      );
       map.addSource(NYU_SOURCE_ID, {
         type: "geojson",
         data: nyuBuildingsGeoJSON(),
@@ -307,34 +322,18 @@ export default function PulseMap({
 
     return () => {
       markerRef.current?.remove();
+      deckOverlayRef.current?.finalize();
+      deckOverlayRef.current = null;
       map.remove();
       mapRef.current = null;
     };
   }, []);
 
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map) {
-      return;
-    }
-
-    const applyHeatmap = () => {
-      const source = map.getSource(HEATMAP_SOURCE_ID) as
-        | GeoJSONSource
-        | undefined;
-      source?.setData(heatmapDataRef.current ?? emptyFeatureCollection());
-    };
-
-    if (map.isStyleLoaded() && map.getSource(HEATMAP_SOURCE_ID)) {
-      applyHeatmap();
-      return;
-    }
-
-    map.once("load", applyHeatmap);
-    return () => {
-      map.off("load", applyHeatmap);
-    };
-  }, [heatmapGeoJSON]);
+    deckOverlayRef.current?.setProps({
+      layers: deckEventLayers(heatmapDataRef.current, viewMode),
+    });
+  }, [heatmapGeoJSON, viewMode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -369,13 +368,6 @@ export default function PulseMap({
     }
 
     const applyVisibility = () => {
-      if (map.getLayer(HEATMAP_LAYER_ID)) {
-        map.setLayoutProperty(
-          HEATMAP_LAYER_ID,
-          "visibility",
-          viewMode === "events" ? "visible" : "none",
-        );
-      }
       for (const layer of [
         DEMOGRAPHICS_FILL_LAYER_ID,
         DEMOGRAPHICS_LINE_LAYER_ID,
